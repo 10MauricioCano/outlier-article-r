@@ -1,3 +1,29 @@
+library(here)
+
+# Always resolve paths from the repo root (RStudio Project)
+repo_root <- here::here()
+
+# Outputs directory inside the repo
+out_dir <- here::here("outputs")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+library(here)
+
+data_dir <- here::here("data", "raw")
+
+if (!dir.exists(data_dir)) {
+  stop(paste0("data_dir not found: ", data_dir))
+}
+
+
+out_dir <- here::here("outputs")
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+
+run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
+run_dir <- file.path(out_dir, paste0("run_", run_id))
+dir.create(run_dir, showWarnings = FALSE, recursive = TRUE)
+
+
 #options(stringsAsFactors = FALSE)
 #proj_root <- getwd()  # VS Code abrirá el R terminal aquí
 #message("Project root: ", proj_root)
@@ -14,8 +40,7 @@ my_packages = c("expm","gridExtra","tidyverse","knitr","kableExtra",
                 "dobin","FNN","parallel","depthTools","OutliersO3", "mvoutlier",
                 "fds", "caret", "tictoc", "REPPlab", "rJava", "PPcovMcd", "ICSOutlier", "data.table"
                 , "R.matlab")
-not_installed = my_packages[!(my_packages %in% installed.packages()[ , "Package"])]
-if (length(not_installed)) install.packages(not_installed, dependencies = TRUE)
+
 for (q in 1:length(my_packages)) {
   library(my_packages[q], character.only = TRUE)
 }
@@ -56,14 +81,12 @@ cm_to_row <- function(cm, sim_id, dataset, method, positive = "2", negative = "1
 
 # Creación de ficheros para guardar resultados----
 
+data_dir <- here::here("data", "raw")
+stopifnot(dir.exists(data_dir))
+
 run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-out_dir <- file.path("outputs", run_id)
+out_dir <- here::here("outputs", paste0("run_", run_id))
 dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
-
-all_cm <- list()
-all_metrics <- list()
-all_raw <- list()
-
 
 # Cálculo de métricas de desempeño----
 
@@ -97,42 +120,40 @@ for(simulation_proposed in simulations_to_run) {
 
 rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
   
-# Simulation 2 ----
-if (simulation_proposed == 2) {
-  file_path <- 'C:/Users/amcan/Dropbox/Analítica/Trabajo de grado/Códigos/Bases/wine.mat'
-  mat_data <- readMat(file_path)
-  x3 <- convert_to_matrix(mat_data$X)
-  fil<-nrow(x3)/2
-  vec <- as.factor(mat_data$y + 1)
-  true_labels <- factor(vec, levels = c(1,2))
-  dataset_name <- "Wine"
+  # Simulation 2 ----
+  if (simulation_proposed == 2) {
+    file_path <- file.path(data_dir, "wine.mat")
+    mat_data <- readMat(file_path)
+    x3 <- convert_to_matrix(mat_data$X)
+    fil <- nrow(x3) / 2
+    vec <- as.factor(mat_data$y + 1)
+    true_labels <- factor(vec, levels = c(1, 2))
+    dataset_name <- "Wine"
+    
+    # Simulation 3 ----
+  } else if (simulation_proposed == 3) {
+    file_path <- file.path(data_dir, "satimage-2.mat")
+    mat_data <- readMat(file_path)
+    x3 <- mat_data$X
+    fil <- nrow(x3) / 2
+    vec <- as.factor(mat_data$y + 1)
+    true_labels <- factor(vec, levels = c(1, 2))
+    dataset_name <- "Satimage-2"
+    
+    # Simulation 4 ----
+  } else if (simulation_proposed == 4) {
+    file_path <- file.path(data_dir, "breastw.mat")
+    mat_data <- readMat(file_path)
+    x3 <- mat_data$X
+    fil <- nrow(x3) / 2
+    vec <- as.factor(mat_data$y + 1)
+    true_labels <- factor(vec, levels = c(1, 2))
+    dataset_name <- "Breastw"
+    
+  } else {
+    stop("Simulations go from 2 to 4.")
+  }
   
-  # Simulation 3 ----
-  
-} else if (simulation_proposed == 3) {
-  file_path <- "C:/Users/amcan/Dropbox/Analítica/Trabajo de grado/Códigos/Bases/satimage-2.mat"
-  mat_data <- readMat(file_path)
-  x3 <- mat_data$X
-  fil<-nrow(x3)/2
-  vec <- as.factor(mat_data$y + 1)
-  true_labels <- factor(vec, levels = c(1,2))
-  dataset_name <- "Satimage-2"
-  
-  
-  
-  # Simulation 4 ----
-} else if (simulation_proposed == 4) {
-  file_path <- "C:/Users/amcan/Dropbox/Analítica/Trabajo de grado/Códigos/Bases/breastw.mat"
-  mat_data <- readMat(file_path)
-  x3 <- mat_data$X
-  fil <- nrow(x3)/2
-  vec <- as.factor(mat_data$y + 1)
-  true_labels <- factor(vec, levels = c(1,2)) 
-  dataset_name <- "Breastw"
-  
-} else {
-  print('Las simulaciones van de la 2 a la 4')
-}
 
 x3 <- convert_to_matrix(x3)
 
@@ -609,7 +630,7 @@ all_metrics[[key]] <- metrics_block
 
 # Escribe archivo por simulación, por trazabilidad
 write.csv(cm_block, file.path(out_dir, paste0("cm_", key, ".csv")), row.names = FALSE)
-write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")), row.names = FALSE)
+#write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")), row.names = FALSE)
 
 
 # Calcula métricas a partir de cada matriz de confusión
@@ -662,8 +683,8 @@ metrics_all <- do.call(rbind, all_metrics)
 
 write.csv(cm_all, file.path(out_dir, "confusion_ALL.csv"), row.names = FALSE)
 write.csv(metrics_all, file.path(out_dir, "metrics_ALL.csv"), row.names = FALSE)
-write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")),
-          row.names = FALSE)
+#write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")),
+          #row.names = FALSE)
 
 saveRDS(list(cm = all_cm, metrics = all_metrics, raw = all_raw),
         file.path(out_dir, "all_results.rds"))
