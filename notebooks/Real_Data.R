@@ -541,13 +541,16 @@ at_m <- calculate_outlyingness(selected_data)
 
 #Etiquetado de outliers----
 
-cluster_to_labels <- function(score_vec) {
-  cl <- kmeans(score_vec, centers = 2)
-  means <- tapply(score_vec, cl$cluster, mean)
-  out_cluster <- as.integer(names(which.max(means)))  # outliers = mayor score
-  pred <- ifelse(cl$cluster == out_cluster, "2", "1")
+cluster_to_labels <- function(score_vec, alpha = 0.02, alpha_max = 0.05) {
+  alpha <- min(alpha, alpha_max)
+  n <- length(score_vec)
+  k <- max(1L, ceiling(alpha * n))
+  ord <- order(score_vec, decreasing = TRUE)
+  pred <- rep("1", n)
+  pred[ord[seq_len(k)]] <- "2"
   factor(pred, levels = c("1","2"))
 }
+
 
 pred_dso    <- cluster_to_labels(at_m)
 W5.cm <- confusionMatrix(pred_dso, true_labels)$table
