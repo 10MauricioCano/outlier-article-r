@@ -1,35 +1,19 @@
 library(here)
 
 # Always resolve paths from the repo root (RStudio Project)
-repo_root <- here::here()
 
 # Outputs directory inside the repo
-out_dir <- here::here("outputs")
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-library(here)
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 data_dir <- here::here("data", "raw")
+stopifnot(dir.exists(data_dir))
 
-if (!dir.exists(data_dir)) {
-  stop(paste0("data_dir not found: ", data_dir))
-}
-
-
-out_dir <- here::here("outputs")
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-run_dir <- file.path(out_dir, paste0("run_", run_id))
-dir.create(run_dir, showWarnings = FALSE, recursive = TRUE)
+out_dir <- here::here("outputs", paste0("run_", run_id))
+dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
-
-#options(stringsAsFactors = FALSE)
-#proj_root <- getwd()  # VS Code abrirá el R terminal aquí
-#message("Project root: ", proj_root)
-
-#setwd("C:/Users/amcan/Dropbox/Maestria/Trabajo de grado/Artículo")
-#source("cod_real_data.R", echo = TRUE)
 
 ## Required Packages----
 
@@ -41,9 +25,12 @@ my_packages = c("expm","gridExtra","tidyverse","knitr","kableExtra",
                 "fds", "caret", "tictoc", "REPPlab", "rJava", "PPcovMcd", "ICSOutlier", "data.table"
                 , "R.matlab")
 
-for (q in 1:length(my_packages)) {
-  library(my_packages[q], character.only = TRUE)
+missing <- my_packages[!vapply(my_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing)) {
+  stop("Missing packages: ", paste(missing, collapse = ", "),
+       ". Install them (in renv) with install.packages(...).")
 }
+invisible(lapply(my_packages, library, character.only = TRUE))
 
 # Función auxiliar para convertir datos a matriz----
 convert_to_matrix <- function(data) {
@@ -79,14 +66,7 @@ cm_to_row <- function(cm, sim_id, dataset, method, positive = "2", negative = "1
 }
 
 
-# Creación de ficheros para guardar resultados----
 
-data_dir <- here::here("data", "raw")
-stopifnot(dir.exists(data_dir))
-
-run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-out_dir <- here::here("outputs", paste0("run_", run_id))
-dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Cálculo de métricas de desempeño----
 
@@ -114,8 +94,15 @@ rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
 
 # Simulaciones----
 
+all_cm <- list()
+all_metrics <- list()
+all_raw <- list()
+set.seed(123)
+
 simulations_to_run <- 2:4
 #Borrar resultados de simulaciones anteriores----
+
+
 for(simulation_proposed in simulations_to_run) {
 
 rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
@@ -689,7 +676,8 @@ write.csv(metrics_all, file.path(out_dir, "metrics_ALL.csv"), row.names = FALSE)
 #write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")),
           #row.names = FALSE)
 
-saveRDS(list(cm = all_cm, metrics = all_metrics, raw = all_raw),
+saveRDS(list(cm = all_cm, metrics = all_metrics),
         file.path(out_dir, "all_results.rds"))
+
 
 cat("\nOK. Resultados en: ", out_dir, "\n")
