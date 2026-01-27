@@ -4,8 +4,6 @@ library(here)
 
 # Outputs directory inside the repo
 
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
-
 data_dir <- here::here("data", "raw")
 stopifnot(dir.exists(data_dir))
 
@@ -21,8 +19,8 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 my_packages = c("expm","gridExtra","tidyverse","knitr","kableExtra",
                 "IRdisplay","mrfDepth","e1071","pracma","MASS","mixtools",
                 "doParallel","foreach","extraDistr","rrcov","Rfast",
-                "dobin","FNN","parallel","depthTools","OutliersO3", "mvoutlier",
-                "fds", "caret", "tictoc", "REPPlab", "rJava", "PPcovMcd", "ICSOutlier", "data.table"
+                "dobin","FNN","parallel","depthTools", "mvoutlier",
+                "fds", "caret", "tictoc", "REPPlab", "PPcovMcd", "ICSOutlier", "data.table"
                 , "R.matlab")
 
 missing <- my_packages[!vapply(my_packages, requireNamespace, logical(1), quietly = TRUE)]
