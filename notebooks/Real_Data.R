@@ -580,13 +580,40 @@ at_m <- calculate_outlyingness(selected_data)
 
 #Etiquetado de outliers----
 
-cluster_to_labels <- function(score_vec, alpha = 0.02, alpha_max = 0.05) {
-  alpha <- min(alpha, alpha_max)
-  n <- length(score_vec)
-  k <- max(1L, ceiling(alpha * n))
-  ord <- order(score_vec, decreasing = TRUE)
-  pred <- rep("1", n)
-  pred[ord[seq_len(k)]] <- "2"
+cluster_to_labels <- function(score_vec, centers = 2, nstart = 50, seed = 123) {
+  # Convert a numeric outlyingness score into labels via 1D k-means.
+  # Outliers are defined as the cluster with the highest mean score.
+  stopifnot(is.numeric(score_vec))
+  if (length(score_vec) < 2L) {
+    return(factor(rep("1", length(score_vec)), levels = c("1","2")))
+  }
+  if (any(!is.finite(score_vec))) {
+    stop("cluster_to_labels(): score_vec contains non-finite values (NA/NaN/Inf).")
+  }
+  if (length(unique(score_vec)) < 2L) {
+    # No separability in the score vector; default to all inliers.
+    return(factor(rep("1", length(score_vec)), levels = c("1","2")))
+  }
+  
+  # Preserve RNG state for reproducibility without contaminating the caller.
+  old_seed_exists <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+  old_seed <- if (old_seed_exists) get(".Random.seed", envir = .GlobalEnv) else NULL
+  on.exit({
+    if (old_seed_exists) {
+      assign(".Random.seed", old_seed, envir = .GlobalEnv)
+    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      rm(".Random.seed", envir = .GlobalEnv)
+    }
+  }, add = TRUE)
+  
+  set.seed(seed)
+  km <- stats::kmeans(score_vec, centers = centers, nstart = nstart)
+  
+  cl <- km$cluster
+  cl_means <- tapply(score_vec, cl, mean)
+  out_cluster <- as.integer(names(which.max(cl_means)))
+  
+  pred <- ifelse(cl == out_cluster, "2", "1")
   factor(pred, levels = c("1","2"))
 }
 
