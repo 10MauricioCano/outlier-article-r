@@ -68,9 +68,29 @@ cm_to_row <- function(cm, sim_id, dataset, method, positive = "2", negative = "1
 
 # Cálculo de métricas de desempeño----
 
-calculate_metrics <- function(conf_matrix) {
-  TN <- conf_matrix["1","1"]; FP <- conf_matrix["2","1"]
-  FN <- conf_matrix["1","2"]; TP <- conf_matrix["2","2"]
+calculate_metrics <- function(conf_matrix, positive = "2", negative = "1") {
+  # conf_matrix is typically caret::confusionMatrix(...)$table (a 2x2 table/matrix)
+  cm <- as.matrix(conf_matrix)
+  
+  # Ensure 2x2 shape; otherwise return NAs
+  if (is.null(dim(cm)) || any(dim(cm) != c(2,2))) {
+    return(c(Sensitivity = NA_real_,
+             Specificity = NA_real_,
+             Accuracy = NA_real_,
+             Balanced_Accuracy = NA_real_))
+  }
+  
+  rn <- rownames(cm); cn <- colnames(cm)
+  has_names <- !is.null(rn) && !is.null(cn) && all(c(negative, positive) %in% rn) && all(c(negative, positive) %in% cn)
+  
+  if (has_names) {
+    TN <- cm[negative, negative]; FP <- cm[positive, negative]
+    FN <- cm[negative, positive]; TP <- cm[positive, positive]
+  } else {
+    # fallback: assume ordering [negative, positive] in both dims
+    TN <- cm[1,1]; FP <- cm[2,1]
+    FN <- cm[1,2]; TP <- cm[2,2]
+  }
   
   den_sens <- TP + FN
   den_spec <- TN + FP
@@ -87,7 +107,6 @@ calculate_metrics <- function(conf_matrix) {
     Accuracy = accuracy,
     Balanced_Accuracy = balanced_accuracy)
 }
-
 rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
 
 # Simulaciones----
@@ -150,24 +169,28 @@ n <- nrow(X)
 
 # Huberización de datos: se calcula valor de corte cH (percentil 97.5)-----
 
-huber <- function(x){
+huber <- function(x, p_clip = 0.975, eps = 1e-6){
   x <- as.matrix(x)
   
   mediana_huber <- apply(x, 2, median, na.rm = TRUE)
-  mad_huber <- pmax(1e-6,apply(x, 2, mad))
+  mad_huber <- pmax(eps, apply(x, 2, mad, na.rm = TRUE))
   
   cH <- numeric(ncol(x))
   c_ij_huber <- matrix(0, nrow = nrow(x), ncol = ncol(x))
-  x_hub <- matrix(0, ncol = ncol(x), nrow = nrow(x))
   
-  for (i in seq_len(ncol(x))){
-    c_ij_huber[, i] <- (x[, i] - mediana_huber[i]) / mad_huber[i]
-    cH[i] <- quantile(abs(c_ij_huber[, i]), probs = 0.975, na.rm = TRUE)
-    c_aux <- pmax(-cH[i], pmin(cH[i], c_ij_huber[, i]))
-    x_hub[, i] <- mediana_huber[i] + c_aux * mad_huber[i]
-   
+  # Estandariza por MAD (robusto) y calcula cutoffs columna-a-columna
+  for (i in 1:ncol(x)) {
+    c_ij_huber[, i] <- abs(x[, i] - mediana_huber[i]) / mad_huber[i]
+    cH[i] <- as.numeric(quantile(abs(c_ij_huber[, i]), probs = p_clip, na.rm = TRUE))
   }
-  return(x_hub)
+  
+  x_huber <- matrix(0, nrow = nrow(x), ncol = ncol(x))
+  for (i in 1:ncol(x)) {
+    z <- (x[, i] - mediana_huber[i]) / mad_huber[i]
+    x_huber[, i] <- pmin(pmax(z, -cH[i]), cH[i]) * mad_huber[i] + mediana_huber[i]
+  }
+  
+  return(x_huber)
 }
 
 #Funciones High Dimensional Outlier detection----
@@ -362,27 +385,51 @@ dob_base <- if (!is.null(dob$basis)) dob$basis else dob$rotation
 
 # DOBIN with S-Orthogonal Projection
 # Peña y Prieto Transformation (2001) para identificación de clusters
-pena_prieto_transformation <- function(X, dob_base) {
-  #dob_base <- calculated_dobin$rotation
+pena_prieto_transformation <- function(X, dob_base, ridge = 1e-8) {
+  X <- as.matrix(X)
+  
+  # Scatter clasico (si quieres robusto, aqui es el lugar; por ahora preservo la idea original)
   s1 <- cov(X)
-  inv1 <- solve(t(dob_base) %*% s1 %*% dob_base)
+  
+  A <- t(dob_base) %*% s1 %*% dob_base
   I <- diag(nrow(dob_base))
-  Q2 <- I - (inv1 %*% dob_base %*% t(dob_base) %*% s1)
-  T3 <- X %*% Q2
-  return(T3)
+  
+  # Inversion numericamente estable: intenta solve; si falla usa ridge + qr.solve
+  inv1 <- tryCatch(
+    solve(A),
+    error = function(e) {
+      A2 <- A + ridge * diag(nrow(A))
+      qr.solve(A2)
+    }
+  )
+  
+  Q2 <- I - (dob_base %*% inv1 %*% t(dob_base) %*% s1)
+  transformation <- X %*% Q2
+  
+  return(transformation)
 }
 
 # Selección de componentes basados en Kurtosis y Skewness
 component_selection <- function(transformation) {
-  kurtosis_per_component <- apply(transformation, 2, kurtosis)
-  skewness_per_component <- apply(transformation, 2, skewness)
-  sum_coef_per_component <- kurtosis_per_component^2 + skewness_per_component^2
+  transformation <- as.matrix(transformation)
   
-  ordered_indexes <- order(-sum_coef_per_component)
-  cutoff <- median(sum_coef_per_component[ordered_indexes])
-  selected_components <- which(sum_coef_per_component[ordered_indexes] > cutoff)
+  kurtosis_per_component <- apply(transformation, 2, kurtosis, na.rm = TRUE)
+  skewness_per_component <- apply(transformation, 2, skewness, na.rm = TRUE)
   
-  return(transformation[, selected_components])
+  sum_coef_per_component <- abs(kurtosis_per_component) + abs(skewness_per_component)
+  
+  # Ordena componentes (indices reales) por relevancia descendente
+  ordered_indexes <- order(sum_coef_per_component, decreasing = TRUE)
+  
+  cutoff <- median(sum_coef_per_component, na.rm = TRUE)
+  
+  # IMPORTANT: map back to original component indices
+  keep <- ordered_indexes[sum_coef_per_component[ordered_indexes] > cutoff]
+  
+  # fallback: si nada supera el cutoff, preserva al menos el mejor componente
+  if (length(keep) == 0L) keep <- ordered_indexes[1L]
+  
+  return(transformation[, keep, drop = FALSE])
 }
 
 # Cálculo de Outlyingness Tradicional
@@ -420,47 +467,54 @@ r_i <- calculate_r_i(component_selection(T3))
 
 #Outlyingness ajustado por componente SDC------
 
-SDC <- function(x, r_i){
+SDC <- function(x, r_i, eps = 1e-6){
   
-  mediana <- apply(x, 2, median)
+  x <- as.matrix(x)
+  r_i <- as.matrix(r_i)
+  
+  # chequeo basico de consistencia dimensional
+  if (!all(dim(x) == dim(r_i))) {
+    stop("SDC: dim(x) and dim(r_i) must match. Compute r_i using the same x you pass to SDC().")
+  }
+  
+  mediana <- apply(x, 2, median, na.rm = TRUE)
   p <- ncol(x)
   n <- nrow(x)
+  
   ind_1 <- floor((n + p - 1) / 2)
   ind_2 <- ceiling((n + p - 1) / 2) + 1
+  
+  # bounds safety
+  ind_1 <- max(1L, min(n, ind_1))
+  ind_2 <- max(1L, min(n, ind_2))
+  
   beta <- qnorm(0.5 * ((n + p - 1) / (2 * n) + 1))
+  k <- 1.4826 * (1 + 5 / (n - p))
   
-  mad_modificado <- numeric(length = p)
+  c_ij <- matrix(0, nrow = n, ncol = p)
+  mad_modificado <- numeric(p)
   
-  # Calcular la MAD modificada para cada componente
-  for (i in 1:p) {
-    desv_abs <- abs(x[, i] - mediana[i])
-    desv_abs_ordenado <- sort(desv_abs)
-    mad_modificado[i] <- pmax(1e-6,(desv_abs_ordenado[ind_1] + desv_abs_ordenado[ind_2]) / (2 * beta))
+  for (i in 1:p){
+    abs_dev <- abs(x[, i] - mediana[i])
+    sorted_dev <- sort(abs_dev)
+    
+    mad_modificado[i] <- (sorted_dev[ind_1] + sorted_dev[ind_2]) / (2 * beta)
+    mad_modificado[i] <- pmax(eps, mad_modificado[i])
+    
+    c_ij[, i] <- abs_dev / mad_modificado[i]
   }
   
-  # Outlyingness de observación i en dirección j c_ij
-  c_ij <- matrix(NA, nrow = n, ncol = p)
-  for (i in 1:p) {
-    c_ij[, i] <- abs(x[, i] - mediana[i]) / mad_modificado[i]
+  alpha_SDC <- c_ij
+  for (i in 1:n){
+    max_cij <- max(c_ij[i, ], na.rm = TRUE)
+    max_cij <- pmax(eps, max_cij)
+    alpha_SDC[i, ] <- c_ij[i, ] / max_cij
   }
   
-  # Calcular el máximo c_ij para cada observación
-  max_c_ij <- apply(c_ij, 1, max)
+  r_ij_SDC <- alpha_SDC * r_i + (1 - alpha_SDC) * c_ij
   
-  # Evitar divisiones por cero
-  max_c_ij[max_c_ij == 0] <- 1e-6
-  
-  # Calcular alpha_SDC
-  
-  alpha_SDC <- sweep(c_ij, 1, max_c_ij, "/")
-
-  # Calcular r_ij
-  r_ij <- alpha_SDC * r_i + (1 - alpha_SDC) * c_ij
-  
-  # Calcular el outlyingness ajustado
-  outlyingness_SDC <- apply(r_ij, 1, max)
-  
-  return(outlyingness_SDC)
+  outlyingness_ajustado_SDC <- apply(r_ij_SDC, 1, max, na.rm = TRUE)
+  return(outlyingness_ajustado_SDC)
 }
 
 SDM <- function(x2){
