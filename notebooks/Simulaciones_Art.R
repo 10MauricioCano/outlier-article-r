@@ -149,22 +149,23 @@ calculate_r_i <- function(x) {
 }
 
 SDC <- function(x, r_i){
-  
+
   mediana <- apply(x, 2, median)
   p <- ncol(x)
   n <- nrow(x)
-  ind_1 <- floor((n + p - 1) / 2)
-  ind_2 <- ceiling((n + p - 1) / 2) + 1
+  ind_1 <- max(1L, min(n, floor((n + p - 1) / 2)))
+  ind_2 <- max(1L, min(n, ceiling((n + p - 1) / 2) + 1))
   beta <- qnorm(0.5 * ((n + p - 1) / (2 * n) + 1))
-  
+
   mad_modificado <- numeric(length = p)
-  
+
   # Calcular la MAD modificada para cada componente
   for (i in 1:p) {
     desv_abs <- abs(x[, i] - mediana[i])
     desv_abs_ordenado <- sort(desv_abs)
     mad_modificado[i] <- (desv_abs_ordenado[ind_1] + desv_abs_ordenado[ind_2]) / (2 * beta)
   }
+  mad_modificado <- pmax(1e-6, mad_modificado)
   
   # Outlyingness de observación i en dirección j c_ij
   c_ij <- matrix(NA, nrow = n, ncol = p)
@@ -196,22 +197,21 @@ SDM <- function(x2){
   mediana <- apply(x2, 2, median)
   p <- ncol(x2)
   n <- nrow(x2)
-  ind_1 <- floor((n + p - 1) / 2)
-  ind_2 <- ceiling((n + p - 1) / 2) + 1
+  ind_1 <- max(1L, min(n, floor((n + p - 1) / 2)))
+  ind_2 <- max(1L, min(n, ceiling((n + p - 1) / 2) + 1))
   beta <- qnorm(0.5 * ((n + p - 1) / (2 * n) + 1))
   mad_componentes_seleccionados <- apply(x2, 2, mad)
-  reescalado <- sweep(x2,1,mad_componentes_seleccionados, FUN = '/')
+  reescalado <- sweep(x2, 2, mad_componentes_seleccionados, FUN = '/')
   #Se calcula el respectivo r_i
-  mu_reescalado <- abs(reescalado-median(reescalado))
-  s_reescalado <- median(mu_reescalado)
-  r_i_SDM <- mu_reescalado/s_reescalado
-  
-  
+  mu_reescalado <- abs(sweep(reescalado, 2, apply(reescalado, 2, median), "-"))
+  s_reescalado  <- pmax(1e-6, apply(mu_reescalado, 2, median))
+  r_i_SDM <- sweep(mu_reescalado, 2, s_reescalado, "/")
+
+
   #Cálculo del alpha para el método SDM----
-  u_i <- apply(r_i_SDM, 1, max)
-  alpha_SDM <- matrix(NA, nrow = nrow(x2), ncol = ncol(x2))
-  alpha_SDM <- r_i_SDM / u_i
-  
+  u_i <- pmax(1e-6, apply(r_i_SDM, 1, max))
+  alpha_SDM <- sweep(r_i_SDM, 1, u_i, "/")
+
   # Calcular la MAD modificada para cada componente
   mad_modificado <- numeric(length = p)
   for (i in 1:ncol(x2)) {
@@ -219,22 +219,23 @@ SDM <- function(x2){
     desv_abs_ordenado <- sort(desv_abs)
     mad_modificado[i] <- (desv_abs_ordenado[ind_1] + desv_abs_ordenado[ind_2]) / (2 * beta)
   }
-  
+  mad_modificado <- pmax(1e-6, mad_modificado)
+
   # Outlyingness de observación i en dirección j c_ij
-  c_ij <- matrix(NA,nrow = nrow(x2), ncol = ncol(x2))
-  
+  c_ij <- matrix(NA_real_, n, p)
+
   for (i in 1:ncol(x2)) {
-    c_ij[,] <- abs(x2[,]-mediana[i])/mad_modificado[i]
+    c_ij[, i] <- abs(x2[, i] - mediana[i]) / mad_modificado[i]
   }
-  
+
   # Outlyingness adaptado de observación i en dirección que maximiza outlyngness
-  
+
   r_ij_SDM <- matrix(NA, nrow = nrow(x2), ncol= ncol(x2))
-  
+
   r_ij_SDM[,] <- alpha_SDM[,] * r_i_SDM[,] + (1 - alpha_SDM) * c_ij[,]
-  
+
   outlyingness_SDM <- apply((r_ij_SDM), 1, max)
-  
+
   return(outlyingness_SDM)
 }
 
@@ -297,8 +298,7 @@ for (modelo in modelos) {
               
               # DOBIN transform (used by your DSO pipeline)
               calculated_dobin <- dobin::dobin(X)
-              dob_knn <- X %*% calculated_dobin$rotation
-              
+
               # REPPlab (EPP)
               X_EPP <- REPPlab::EPPlab(X, PPalg="PSO", PPindex="FriedmanTukey",
                                        n.simu=1, maxiter=1000, sphere=TRUE)

@@ -233,23 +233,6 @@ calculate_ab_robust <- function(d, n, alpha = 0.05) {
   return(list(a0 = a0, b0 = b0, C_nd = C_nd))
 }
 
-final_robust <- function(j, n, d, t = C_nd, rsigma, a, b){
-  VP = 0
-  outlier = rnorm(d)
-  pto = t / sqrt(sum(outlier^2)) * outlier %*% rsigma
-  muestra = matrix(rnorm(d * n), n, d) %*% rsigma 
-  v = rnorm(d)
-  proy = muestra %*% v
-  pto_proy = abs(pto %*% v - median(proy)) / mad(proy)
-  while(pto_proy > a && pto_proy < b){
-    v = rnorm(d)
-    proy = muestra %*% v
-    pto_proy = abs(pto %*% v - median(proy)) / mad(proy)
-  }
-  if(pto_proy > b){VP = 1}
-  VP
-}
-
 
 ## ------------------------------------------------------------------------------
 ## 2. APLICACIÓN DE MÉTODOS (epp, hdod, pp-mcd, ics)----
