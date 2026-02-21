@@ -1,4 +1,8 @@
+
+
 library(here)
+source(here::here("R", "utils_analysis.R"))
+
 
 # Always resolve paths from the repo root (RStudio Project)
 
@@ -6,11 +10,12 @@ library(here)
 
 data_dir <- here::here("data", "raw")
 stopifnot(dir.exists(data_dir))
+run_dir <- create_run_directory()
 
 
-run_id <- format(Sys.time(), "%Y%m%d_%H%M%S")
-out_dir <- here::here("outputs", paste0("run_", run_id))
-dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
+out_dir <- create_run_directory()
+run_dir <- out_dir
+
 
 
 ## Required Packages----
@@ -68,46 +73,46 @@ cm_to_row <- function(cm, sim_id, dataset, method, positive = "2", negative = "1
 
 # Cálculo de métricas de desempeño----
 
-calculate_metrics <- function(conf_matrix, positive = "2", negative = "1") {
-  # conf_matrix is typically caret::confusionMatrix(...)$table (a 2x2 table/matrix)
-  cm <- as.matrix(conf_matrix)
-  
-  # Ensure 2x2 shape; otherwise return NAs
-  if (is.null(dim(cm)) || any(dim(cm) != c(2,2))) {
-    return(c(Sensitivity = NA_real_,
-             Specificity = NA_real_,
-             Accuracy = NA_real_,
-             Balanced_Accuracy = NA_real_))
-  }
-  
-  rn <- rownames(cm); cn <- colnames(cm)
-  has_names <- !is.null(rn) && !is.null(cn) && all(c(negative, positive) %in% rn) && all(c(negative, positive) %in% cn)
-  
-  if (has_names) {
-    TN <- cm[negative, negative]; FP <- cm[positive, negative]
-    FN <- cm[negative, positive]; TP <- cm[positive, positive]
-  } else {
-    # fallback: assume ordering [negative, positive] in both dims
-    TN <- cm[1,1]; FP <- cm[2,1]
-    FN <- cm[1,2]; TP <- cm[2,2]
-  }
-  
-  den_sens <- TP + FN
-  den_spec <- TN + FP
-  den_acc  <- TN + FP + FN + TP
-  
-  sensitivity <- ifelse(den_sens > 0, TP/den_sens, NA_real_)
-  specificity <- ifelse(den_spec > 0, TN/den_spec, NA_real_)
-  accuracy    <- ifelse(den_acc  > 0, (TP+TN)/den_acc, NA_real_)
-  balanced_accuracy <- ifelse(is.na(sensitivity) | is.na(specificity),
-                              NA_real_, (sensitivity + specificity)/2)
-  
-  c(Sensitivity = sensitivity,
-    Specificity = specificity,
-    Accuracy = accuracy,
-    Balanced_Accuracy = balanced_accuracy)
-}
-rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
+# calculate_metrics <- function(conf_matrix, positive = "2", negative = "1") {
+#   # conf_matrix is typically caret::confusionMatrix(...)$table (a 2x2 table/matrix)
+#   cm <- as.matrix(conf_matrix)
+#   
+#   # Ensure 2x2 shape; otherwise return NAs
+#   if (is.null(dim(cm)) || any(dim(cm) != c(2,2))) {
+#     return(c(Sensitivity = NA_real_,
+#              Specificity = NA_real_,
+#              Accuracy = NA_real_,
+#              Balanced_Accuracy = NA_real_))
+#   }
+#   
+#   rn <- rownames(cm); cn <- colnames(cm)
+#   has_names <- !is.null(rn) && !is.null(cn) && all(c(negative, positive) %in% rn) && all(c(negative, positive) %in% cn)
+#   
+#   if (has_names) {
+#     TN <- cm[negative, negative]; FP <- cm[positive, negative]
+#     FN <- cm[negative, positive]; TP <- cm[positive, positive]
+#   } else {
+#     # fallback: assume ordering [negative, positive] in both dims
+#     TN <- cm[1,1]; FP <- cm[2,1]
+#     FN <- cm[1,2]; TP <- cm[2,2]
+#   }
+#   
+#   den_sens <- TP + FN
+#   den_spec <- TN + FP
+#   den_acc  <- TN + FP + FN + TP
+#   
+#   sensitivity <- ifelse(den_sens > 0, TP/den_sens, NA_real_)
+#   specificity <- ifelse(den_spec > 0, TN/den_spec, NA_real_)
+#   accuracy    <- ifelse(den_acc  > 0, (TP+TN)/den_acc, NA_real_)
+#   balanced_accuracy <- ifelse(is.na(sensitivity) | is.na(specificity),
+#                               NA_real_, (sensitivity + specificity)/2)
+#   
+#   c(Sensitivity = sensitivity,
+#     Specificity = specificity,
+#     Accuracy = accuracy,
+#     Balanced_Accuracy = balanced_accuracy)
+# }
+# rm(list = ls(pattern = "^predicted_labels_"), inherits = TRUE)
 
 # Simulaciones----
 
@@ -462,8 +467,6 @@ T3 <- pena_prieto_transformation(X, dob_base)
 selected_data <- component_selection(T3)
 at_m <- calculate_outlyingness(selected_data)
 
-# Cálculo de r_i-----
-r_i <- calculate_r_i(component_selection(T3))
 
 #Outlyingness ajustado por componente SDC------
 
@@ -568,54 +571,6 @@ SDM <- function(x2){
 
 
 #-----------------------#-----------------------#-----------------------#-----------------------#-------------------------------------
-
-# Prueba del método
-
-# Con cálculo de outlyingness tradicional
-
-T3 <- pena_prieto_transformation(X, dob_base)
-selected_data <- component_selection(T3)
-at_m <- calculate_outlyingness(selected_data)
-
-
-#Etiquetado de outliers----
-
-cluster_to_labels <- function(score_vec, centers = 2, nstart = 50, seed = 123) {
-  # Convert a numeric outlyingness score into labels via 1D k-means.
-  # Outliers are defined as the cluster with the highest mean score.
-  stopifnot(is.numeric(score_vec))
-  if (length(score_vec) < 2L) {
-    return(factor(rep("1", length(score_vec)), levels = c("1","2")))
-  }
-  if (any(!is.finite(score_vec))) {
-    stop("cluster_to_labels(): score_vec contains non-finite values (NA/NaN/Inf).")
-  }
-  if (length(unique(score_vec)) < 2L) {
-    # No separability in the score vector; default to all inliers.
-    return(factor(rep("1", length(score_vec)), levels = c("1","2")))
-  }
-  
-  # Preserve RNG state for reproducibility without contaminating the caller.
-  old_seed_exists <- exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
-  old_seed <- if (old_seed_exists) get(".Random.seed", envir = .GlobalEnv) else NULL
-  on.exit({
-    if (old_seed_exists) {
-      assign(".Random.seed", old_seed, envir = .GlobalEnv)
-    } else if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
-      rm(".Random.seed", envir = .GlobalEnv)
-    }
-  }, add = TRUE)
-  
-  set.seed(seed)
-  km <- stats::kmeans(score_vec, centers = centers, nstart = nstart)
-  
-  cl <- km$cluster
-  cl_means <- tapply(score_vec, cl, mean)
-  out_cluster <- as.integer(names(which.max(cl_means)))
-  
-  pred <- ifelse(cl == out_cluster, "2", "1")
-  factor(pred, levels = c("1","2"))
-}
 
 
 pred_dso    <- cluster_to_labels(at_m)
@@ -746,17 +701,18 @@ write.csv(cm_block, file.path(out_dir, paste0("cm_", key, ".csv")), row.names = 
 
 }
 
-# Consolidar y exportar resultados----
+# Consolidate and export results ----
 cm_all <- do.call(rbind, all_cm)
 metrics_all <- do.call(rbind, all_metrics)
 
 write.csv(cm_all, file.path(out_dir, "confusion_ALL.csv"), row.names = FALSE)
 write.csv(metrics_all, file.path(out_dir, "metrics_ALL.csv"), row.names = FALSE)
-#write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")),
-          #row.names = FALSE)
 
-saveRDS(list(cm = all_cm, metrics = all_metrics),
-        file.path(out_dir, "all_results.rds"))
+saveRDS(
+  list(cm = all_cm, metrics = all_metrics),
+  file = file.path(out_dir, "all_results.rds")
+)
+
 
 
 cat("\nOK. Resultados en: ", out_dir, "\n")

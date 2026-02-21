@@ -1,187 +1,129 @@
 options(warn = -1)
 set.seed(50)
-## Required Packages
-my_packages = c("expm","gridExtra","tidyverse","knitr","kableExtra",
-               "IRdisplay","mrfDepth","e1071","pracma","MASS","mixtools",
-                "doParallel","foreach","extraDistr","rrcov","Rfast",
-                "dobin","FNN","parallel","depthTools","OutliersO3", "mvoutlier",
-                "fds", "caret", "tictoc", "REPPlab", "rJava", "PPcovMcd", "ICSOutlier", "doRNG")
-not_installed = my_packages[!(my_packages %in% installed.packages()[ , "Package"])]
-if (length(not_installed)) install.packages(not_installed, dependencies = TRUE)
-for (q in 1:length(my_packages)) {
-  library(my_packages[q], character.only = TRUE)
+
+library(here)
+source(here::here("R", "utils_analysis.R"))
+
+## Required packages (NO auto-install) ----
+my_packages <- c(
+  "expm","gridExtra","tidyverse","knitr","kableExtra","IRdisplay","mrfDepth","e1071","pracma",
+  "MASS","mixtools","doParallel","foreach","extraDistr","rrcov","Rfast","dobin","FNN","parallel",
+  "depthTools","OutliersO3","mvoutlier","fds","caret","tictoc","REPPlab","rJava","PPcovMcd",
+  "ICSOutlier","doRNG"
+)
+
+missing <- my_packages[!vapply(my_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing)) {
+  stop("Missing packages: ", paste(missing, collapse = ", "),
+       ". Install them (in renv) with install.packages(...).")
 }
-## Working Directory
-setwd(dirname(rstudioapi::getSourceEditorContext()$path))
-## Load outlier detection codes and auxiliary routines
-source("OL_skew_self_V2.R")
+invisible(lapply(my_packages, library, character.only = TRUE))
 
-############### Originalmente son 50 iteraciones
-iter = 50
-alpha = c(0.05, 0.1, 0.2, 0.3, 0.4)
-dimension = c(10, 30, 50)
+## Paths ----
+data_dir <- here::here("data", "raw")
+sim_path <- file.path(data_dir, "simulations_data.rds")
+stopifnot(file.exists(sim_path))
 
-############### Originalmente es 10*dimensión
-cant_datos = 10*dimension
-outl_dist = c(3,4)
-outl_concent = c(0.5)
-#Funciones High Dimensional Outlier detection----
+## Load pre-generated simulations (NO re-simulation) ----
+sim_data <- readRDS(sim_path)
+
+## Output directory ----
+out_dir <- create_run_directory()
+
+
+## Helpers (aligned with Real_Data.R)----
+
+convert_to_matrix <- function(data) {
+  if (is.data.frame(data)) {
+    return(as.matrix(data))
+  } else if (is.matrix(data)) {
+    return(data)
+  } else if (is.list(data)) {
+    return(do.call(cbind, data))
+  } else {
+    stop("Unsupported data type")
+  }
+}
+
+cm_to_row <- function(cm, sim_id, dataset, method, positive = "2", negative = "1") {
+  if (is.null(dim(cm)) || any(dim(cm) != c(2,2))) {
+    cm <- matrix(NA_integer_, 2, 2, dimnames = list(c(negative, positive), c(negative, positive)))
+  }
+  if (is.null(rownames(cm))) rownames(cm) <- c(negative, positive)
+  if (is.null(colnames(cm))) colnames(cm) <- c(negative, positive)
+  data.frame(
+    simulation = sim_id, dataset = dataset, method = method,
+    TN = cm[negative, negative],
+    FP = cm[positive, negative],
+    FN = cm[negative, positive],
+    TP = cm[positive, positive],
+    stringsAsFactors = FALSE
+  )
+}
+
+# calculate_metrics <- function(conf_matrix, positive = "2", negative = "1") {
+#   cm <- as.matrix(conf_matrix)
+#   if (is.null(dim(cm)) || any(dim(cm) != c(2,2))) {
+#     return(c(Sensitivity = NA_real_,
+#              Specificity = NA_real_,
+#              Accuracy = NA_real_,
+#              Balanced_Accuracy = NA_real_))
+#   }
+#   rn <- rownames(cm); cn <- colnames(cm)
+#   has_names <- !is.null(rn) && !is.null(cn) && all(c(negative, positive) %in% rn) && all(c(negative, positive) %in% cn)
+#   if (has_names) {
+#     TN <- cm[negative, negative]; FP <- cm[positive, negative]
+#     FN <- cm[negative, positive]; TP <- cm[positive, positive]
+#   } else {
+#     TN <- cm[1,1]; FP <- cm[2,1]
+#     FN <- cm[1,2]; TP <- cm[2,2]
+#   }
+#   den_sens <- TP + FN
+#   den_spec <- TN + FP
+#   den_acc  <- TN + FP + FN + TP
+#   sensitivity <- ifelse(den_sens > 0, TP/den_sens, NA_real_)
+#   specificity <- ifelse(den_spec > 0, TN/den_spec, NA_real_)
+#   accuracy    <- ifelse(den_acc  > 0, (TP+TN)/den_acc, NA_real_)
+#   balanced_accuracy <- ifelse(is.na(sensitivity) | is.na(specificity), NA_real_, (sensitivity + specificity)/2)
+#   c(Sensitivity = sensitivity,
+#     Specificity = specificity,
+#     Accuracy = accuracy,
+#     Balanced_Accuracy = balanced_accuracy)
+# }
+
+# cluster_to_labels <- function(score_vec, centers = 2, nstart = 50, seed = 123) {
+#   if (any(!is.finite(score_vec))) {
+#     stop("cluster_to_labels(): score_vec contains non-finite values (NA/NaN/Inf).")
+#   }
+#   set.seed(seed)
+#   km <- stats::kmeans(as.matrix(score_vec), centers = centers, nstart = nstart)
+#   tab <- table(km$cluster)
+#   out_cluster <- as.integer(names(tab)[which.min(tab)])
+#   pred <- ifelse(km$cluster == out_cluster, "2", "1")
+#   factor(pred, levels = c("1","2"))
+# }
+
+## DSO / Peña-Prieto / cellwise adjustments (kept from the original Simulaciones_Art.R)----
+
 sd2 <- function(x){ 
   n = length(x)
   sd(x) / sqrt(n) * sqrt(n-1)
 }
-quantil_id_robust <-function(j, n, d, t){
-  muestra = matrix(rnorm(d * n), n, d)
-  outlier = rnorm(d)
-  pto = t / sqrt(sum(outlier^2)) * outlier
-  v = rnorm(d)
-  proy = muestra %*% v
-  abs(pto %*% v - median(proy)) / max(mad(proy), 1e-6)
-}
-calculate_ab_robust <- function(d, n, alpha = 0.05) {
-  EK = 50 
-  p = 1 - 1 / EK
-  u = (1 - p) * (1 - alpha)
-  v = 1 - alpha / (1 - alpha) * u
-  C_nd = sqrt(qchisq(0.95 ^ (1 / n), d)) 
-  
-  # Simulamos los cuantiles
-  num_simulations = 100  
-  a0_b0 = sort(unlist(lapply(1:num_simulations, function(j) quantil_id_robust(j, n = n, d = d, t = C_nd))))
-  a0 = a0_b0[ floor(length(a0_b0) * u)]
-  b0 = a0_b0[ floor(length(a0_b0) * v)]
-  
-  return(list(a0 = a0, b0 = b0, C_nd = C_nd))
-}
 
-final_robust <- function(j, n, d, t = C_nd, rsigma, a, b){
-  
-  tryCatch(
-  
-    {VP <- 0
-    outlier <-  rnorm(d)
-    pto <-  t / sqrt(sum(outlier^2)) * outlier %*% rsigma
-    muestra <-  matrix(rnorm(d * n), n, d) %*% rsigma 
-    v <-  rnorm(d)
-    proy <-  muestra %*% v
-    pto_proy <-  abs(pto %*% v - median(proy)) / max(mad(proy), 1e-6)
-    
-    while(pto_proy > a && pto_proy < b){
-      v <-  rnorm(d)
-      proy <-  muestra %*% v
-      pto_proy <-  abs(pto %*% v - median(proy)) / max(mad(proy), 1e-6)
-    }
-    if(pto_proy > b){VP <-  1}
-    VP},
-    error = function(e) {
-      message("Ocurrió un error: ", e$message)
-      NA  # Retorna NA en caso de error
-    },
-    warning = function(w) {
-      message("Advertencia: ", w$message)
-      Inf  # Retorna infinito en caso de advertencia
-    },
-    finally = {
-      message("Finalizando la operación.")
-    }
-  )
-  
-}
-
-#########################################################################################################
-####### Multivariate normal distribution N(0,I) contaminated with (alpha/2)*N(0 + delta,lambda*I) #######
-#########################################################################################################
-
-n_cores <- max(1, parallel::detectCores() - 1)   # deja 1 libre
-registerDoParallel(n_cores)
-#registerDoParallel(detectCores())
-
-#res4 = foreach (i2 = 1:length(dimension), .combine = rbind) %do% {
-  #res3 = foreach (i1 = 1:length(alpha), .combine = rbind) %do% {
-    #res2 = foreach (i3 = 1:length(outl_dist), .combine = rbind) %do% {
-      #res1 = foreach (i4 = 1:length(outl_concent), .combine = rbind) %do% {
-        #res0 = foreach (i5 = 1:iter, .combine = rbind) %dopar% {
-
-n_metrics <- 14            # 7 métodos × (TPR,FPR)
-n_meta    <- 5             # modelo, mode, p, alpha, delta
-
-metric_names <- paste0(rep(c("W1","W2","W3","W4","W5","W6","W7"), each = 2),
-                       c(".TPR",".FPR"))
-
-colnames_all <- c("modelo","mode","p","alpha","delta", metric_names)
-resul.t <- matrix(NA, 0, length(colnames_all))
-colnames(resul.t) <- colnames_all
-
-modelos <- c("FDCM", "FICM")      # 2 × 3 = 6 escenarios
-sim.modes <- 1:3
-
-#Niveles de clúster ----
-safeCM <- function(pred, ref, lev = c("0","1")) {
-  pred <- factor(pred, levels = lev)
-  ref  <- factor(ref,  levels = lev)
-  if (length(pred) != length(ref))
-    stop("pred y ref tienen longitudes distintas")
-  confusionMatrix(pred, ref)$table
-}
-
-#r_i-----
-calculate_r_i <- function(x) {
-  num_components <- ncol(x)
-  r_i <- matrix(NA, nrow = nrow(x), ncol = num_components)
-  for (i in 1:num_components) {
-    xi <- x[, i]  # Usar una variable temporal para la columna
-    mu <- abs(xi - median(xi))
-    s <- median(mu)
-    r_i[, i] <- mu / s
-  }
-  return(r_i)
-}
-
-#High Dimensional Outlier Detection ----
-
-robust_outlier_detection <- function(X, label.X, a0, b0, C_nd) {
-  n <- nrow(X)
-  d <- ncol(X)
-  
-  num_projections <- dimension[i2]  
-  VP <- rep(0, n)
-  # 
-  for (i in 1:n) {
-    pto <- X[i, ]
-    detected <- FALSE
-    for (j in 1:num_projections) {
-      v <- rnorm(d)
-      proy <- X %*% v
-      pto_proy <- abs(pto %*% v - median(proy)) / max(mad(proy), 1e-6)
-      if (pto_proy > b0) {
-        VP[i] <- 1
-        detected <- TRUE
-        break
-      }
-    }
-    if (!detected) {
-      VP[i] <- 0
-    }
-  }
-  
- 
-  confusion_mat <- safeCM(VP, label.X)
-  return(confusion_mat)
-}
-
-# Peña y Prieto Transformation (2001) para identificación de clusters----
-
-pena_prieto_transformation <- function(X, dob_base) {
-  dob_base <- calculated_dobin$rotation
+pena_prieto_transformation <- function(X, dob_base, ridge = 1e-8) {
+  X <- as.matrix(X)
   s1 <- cov(X)
-  inv1 <- solve(t(dob_base) %*% s1 %*% dob_base)
-  I <- diag(nrow(dob_base))
-  Q2 <- I - (solve(t(dob_base) %*% s1 %*% dob_base) * dob_base %*% t(dob_base) %*% s1)
+  A  <- t(dob_base) %*% s1 %*% dob_base
+  I  <- diag(nrow(dob_base))
+  inv1 <- tryCatch(
+    solve(A),
+    error = function(e) { qr.solve(A + ridge * diag(nrow(A))) }
+  )
+  Q2 <- I - (dob_base %*% inv1 %*% t(dob_base) %*% s1)
   T3 <- X %*% Q2
   return(T3)
 }
 
-# Cálculo de Outlyingness Tradicional-----
 calculate_outlyingness <- function(selected_data) {
   num_components <- ncol(selected_data)
   at <- matrix(NA, nrow = nrow(selected_data), ncol = num_components)
@@ -194,7 +136,17 @@ calculate_outlyingness <- function(selected_data) {
   return(apply(at, 1, max))
 }
 
-#Outlyingness ajustado por componente SDC------
+calculate_r_i <- function(x) {
+  num_components <- ncol(x)
+  r_i <- matrix(NA, nrow = nrow(x), ncol = num_components)
+  for (i in 1:num_components) {
+    xi <- x[, i]  # Usar una variable temporal para la columna
+    mu <- abs(xi - median(xi))
+    s <- median(mu)
+    r_i[, i] <- mu / s
+  }
+  return(r_i)
+}
 
 SDC <- function(x, r_i){
   
@@ -240,7 +192,6 @@ SDC <- function(x, r_i){
   return(outlyingness_SDC)
 }
 
-#Cálculo del outlyingness por componentes maximizados----
 SDM <- function(x2){
   mediana <- apply(x2, 2, median)
   p <- ncol(x2)
@@ -280,13 +231,32 @@ SDM <- function(x2){
   
   r_ij_SDM <- matrix(NA, nrow = nrow(x2), ncol= ncol(x2))
   
-  r_ij_SDM[,] <- alpha_SDM[,] * r_i[,] + (1 - alpha_SDM) * c_ij[,]
+  r_ij_SDM[,] <- alpha_SDM[,] * r_i_SDM[,] + (1 - alpha_SDM) * c_ij[,]
   
   outlyingness_SDM <- apply((r_ij_SDM), 1, max)
   
   return(outlyingness_SDM)
 }
-#Ejecución de escenarios ----
+
+## Experiment design (analysis-only; data are pre-generated)----
+
+set.seed(50)
+iter <- 50
+alpha <- c(0.05, 0.1, 0.2, 0.3, 0.4)
+dimension <- c(10, 30, 50)
+cant_datos <- 10*dimension
+outl_dist <- c(3,4)
+outl_concent <- c(0.5)
+modelos <- c("FDCM", "FICM")
+sim.modes <- 1:3
+
+n_cores <- max(1, parallel::detectCores() - 1)
+doParallel::registerDoParallel(n_cores)
+
+all_cm <- list()
+all_metrics <- list()
+
+## Run analysis----
 for (modelo in modelos) {
   for (mode in sim.modes) {
     for (i2 in seq_along(dimension)) {
@@ -294,251 +264,155 @@ for (modelo in modelos) {
         for (i3 in seq_along(outl_dist)) {
           for (i4 in seq_along(outl_concent)) {
             
-            resul_mat <- foreach(i5 = 1:iter,
-                             .combine   = rbind,      # apila filas
-                             .packages  = my_packages, # ← reutiliza vector
-                             .export      = c("safeCM","calculate_r_i",
-                                              "SDC","SDM",
-                                              "pena_prieto_transformation",
-                                              "calculate_outlyingness"),
-                             .options.RNG = 50) %dorng% {
-                               
-              
-              if (modelo == "FDCM") {
-                data.sim <- GenAtip(cant_datos[i2], dimension[i2],
-                                    c(alpha[i1], outl_dist[i3],
-                                      outl_concent[i4]),
-                                    sim.mode = mode)
-              } else {           
-                data.sim <- GenAtip_FICM(cant_datos[i2], dimension[i2],
-                                         c(alpha[i1], outl_dist[i3],
-                                           outl_concent[i4]),
-                                         sim.mode = mode)
-              }
-              
-              X       <- data.sim$x
-              label.X <- factor(data.sim$lbl)
-          #-----------------------#-----------------------#-----------------------#-----------------------#-----------------------
-         
-          
-          #-----------------------#-----------------------#-----------------------#---------------------------------------------
-          ##
-          #pairs(X[,1:5], pch = 20)
-          ##
-          calculated_dobin<-dobin(X)
-          dob_knn <- X%*%calculated_dobin$rotation
-          
-          
-          #Exploratory Projection Pursuit REPPLAB----
-          
-          X_EPP <- EPPlab(X, PPalg="PSO", PPindex="FriedmanTukey", n.simu=1, maxiter=1000, sphere=TRUE)
-          
-          out <- EPPlabOutlier(X_EPP, which = 1:ncol(X), k = 3, location = mean,
-                               scale = sd)
-          aux_repp <- unlist(out$outlier)
-          threshold_repp <- quantile(aux_repp, 0.95)
-          
-          # Generar etiquetas predichas basadas en el umbral
-          predicted_labels_repp <- ifelse(aux_repp > threshold_repp, "1", "0")
-          
-          
-          # Alinear niveles de factores
-          #levels_to_use <- union(levels(as.factor(predicted_labels_repp)), levels(as.factor(label.X)))
-          #predicted_labels_repp <- factor(predicted_labels_repp, levels = levels_to_use)
-          #label.X <- factor(label.X, levels = levels_to_use)
-          
-          
-          
-          
-          
-          # Calcular la matriz de confusión
-          
-          W1.cm <- safeCM(predicted_labels_repp, label.X)
-          
-          
-          
-          
-          datos_limp <- sum(data.sim$lbl == 0)   # 0 = fila sin ninguna celda contaminada
-          
-          # Evita problemas si no queda ninguna fila limpia (puede ocurrir en FICM)
-          if (datos_limp < 2) {
-            datos_limp <- 2         # valor mínimo para que mad/quantiles no fallen
-          }
-          
-          ab_values <- calculate_ab_robust(d = dimension[i2], n = datos_limp, alpha = 0.05)
-          a0 <- ab_values$a0
-          b0 <- ab_values$b0
-          C_nd <- ab_values$C_nd
-          W2.cm <- robust_outlier_detection(X, label.X, a0, b0, C_nd)
-          
-          
-          # Projection Pursuit Minimum Covariance Determinant----
-          out_values <- PPcovMcd(X)
-          Projection_pursuit_MCD <- mahalanobis(X, center = out_values$center, cov = out_values$cov)
-          threshold_MCD <- quantile(Projection_pursuit_MCD, 0.95)
-          predicted_labels_MCD <- ifelse(Projection_pursuit_MCD > threshold_MCD, "1", "0")
-
-          levels_to_use <- union(levels(as.factor(predicted_labels_MCD)), levels(as.factor(label.X)))
-          predicted_labels_MCD <- factor(predicted_labels_MCD, levels = levels_to_use)
-          label.X <- factor(label.X, levels = levels_to_use)
-
-          W3.cm <- safeCM(predicted_labels_MCD, label.X)
-
-          # Invariant Coordinate Selection ICS----
-          data_ics <- ics2(X)
-          
-          # Ajustar el nivel de significancia para aumentar la sensibilidad
-          resultado_ICS <- ics.outlier(data_ics, level.test = 0.1)
-          
-          # Acceder al slot 'outliers'
-          predicted_labels <- resultado_ICS@outliers
-          
-          # Verificar la longitud de predicted_labels
-          
-          # Convertir predicted_labels y label.X a factores con los mismos niveles
-          #predicted_labels <- factor(predicted_labels, levels = c(0, 1))
-          #label.X <- factor(as.numeric(as.character(label.X)), levels = c(0, 1))
-          
-          # Calcular la matriz de confusión
-          W4.cm <- safeCM(predicted_labels, label.X)
-          
-# DOBIN with S-Orthogonal Projection----
-          
-          
-         # Selección de componentes basados en Kurtosis y Skewness
-            component_selection <- function(transformation) {
-            kurtosis_per_component <- apply(transformation, 2, kurtosis)
-            skewness_per_component <- apply(transformation, 2, skewness)
-            sum_coef_per_component <- kurtosis_per_component^2 + skewness_per_component^2
+            dataset_name <- paste0(modelo, "_mode", mode,
+                                   "_p", dimension[i2],
+                                   "_alpha", alpha[i1],
+                                   "_delta", outl_dist[i3],
+                                   "_c", outl_concent[i4])
+            key <- dataset_name
             
-            ordered_indexes <- order(-sum_coef_per_component)
-            cutoff <- median(sum_coef_per_component[ordered_indexes])
-            selected_components <- which(sum_coef_per_component[ordered_indexes] > cutoff)
-            
-            return(transformation[, selected_components])
-          }
-          
-          #-----------------------#-----------------------#-----------------------#-----------------------#----------------------------------------
-          
-          
-          T3 <- pena_prieto_transformation(X, dob_base)
-          selected_data <- component_selection(T3)
-          at_m <- calculate_outlyingness(selected_data)
-          
-# Huberizar los datos ----
-          
-          cH <- apply(abs(selected_data), 2, quantile, probs = 0.975, na.rm = TRUE)
-          
-          mediana <- apply(selected_data, 2, median, na.rm= TRUE)
-          mad_orig <- apply(selected_data,2,mad, na.rm=TRUE)
-          c_ij_huber <- matrix(NA, nrow = nrow(selected_data), ncol = ncol(selected_data))
-          
-          for (i in 1:ncol(selected_data)){
-            c_ij_huber[,i] <- (selected_data[,i] - mediana[i]) / mad_orig[i]
-          }
-          
-          sel_Hub <- matrix(0,nrow = nrow(selected_data), ncol = ncol(selected_data))
-          
-          for (i in 1:ncol(selected_data)) {
-            sel_Hub[, i] <- ifelse(c_ij_huber[, i] < -cH[i], mediana[i] - cH[i] * mad_orig[i], 
-                                 ifelse(c_ij_huber[, i] > cH[i], mediana[i] + cH[i] * mad_orig[i], X[, i]))
-          }
-          
-          selected_data <- sel_Hub
-          
-          # Cálculo de r_i-----
-          r_i <- calculate_r_i(selected_data)
-
-          
-          #-----------------------#-----------------------#-----------------------#-----------------------#-------------------------------------
-          
-          # Prueba del método
-          
-          # Con cálculo de outlyingness tradicional
-          T3 <- pena_prieto_transformation(X, dob_base)
-          selected_data <- component_selection(T3)
-          at_m <- calculate_outlyingness(selected_data)
-          
-          cl <- kmeans(at_m, centers=2)
-          if(sum(cl$cluster == 1) < sum(cl$cluster == 2)) {
-            cl$cluster <- ifelse(cl$cluster == 1, 2, 1)
-          }
-          vec3 <- as.factor(data.sim$lbl)
-          
-          cl$cluster <- cl$cluster - 1
-          W5.cm <- safeCM(cl$cluster, vec3)
-          #W5.cm <- confusionMatrix(as.factor(cl$cluster), vec3)$table
-          #print(W5.cm)
-          
-          # Recalcula r_i con el nuevo selected_data
-          r_i <- calculate_r_i(selected_data)
-          
-          # Con Cálculo de Outlyingness ajustado por componente
-          outlyingness_ajustado_SDC <- SDC(selected_data, r_i)
-          
-          # Clustering usando el outlyingness ajustado
-          cl <- kmeans(outlyingness_ajustado_SDC, centers = 2)
-          if (sum(cl$cluster == 1) < sum(cl$cluster == 2)) {
-            cl$cluster <- ifelse(cl$cluster == 1, 2, 1)
-          }
-          vec4 <- as.factor(data.sim$lbl)
-          
-          cl$cluster <- cl$cluster - 1
-          W6.cm <- safeCM(cl$cluster, vec4)
-          
-          #W6.cm <- confusionMatrix(as.factor(cl$cluster), vec4)$table
-          #print(W6.cm)
-          
-          # Cálculo del Outlyingness por maximización SDM
-          
-          outlyingness_ajustado_SDM <- SDM(selected_data)
-          
-          # Clustering usando el outlyingness maximizado
-          cl <- kmeans(outlyingness_ajustado_SDM, centers = 2)
-          if (sum(cl$cluster == 1) < sum(cl$cluster == 2)) {
-            cl$cluster <- ifelse(cl$cluster == 1, 2, 1)
-          }
-          vec5 <- as.factor(data.sim$lbl)
-          
-          cl$cluster <- cl$cluster - 1
-          W7.cm <- safeCM(cl$cluster, vec5)
-          
-          #W7.cm <- confusionMatrix(as.factor(cl$cluster), vec5)$table
-          #print(W7.cm)
-          
-          
-          #-----------------------#-----------------------#-----------------------#-------------------------------
-          
-          # RESULTS
-                      c(W1.cm[2,2]/sum(W1.cm[,2]), W1.cm[2,1]/sum(W1.cm[,1]),
-                          W2.cm[2,2]/sum(W2.cm[,2]), W2.cm[2,1]/sum(W2.cm[,1]),
-                          W3.cm[2,2]/sum(W3.cm[,2]), W3.cm[2,1]/sum(W3.cm[,1]),
-                          W4.cm[2,2]/sum(W4.cm[,2]), W4.cm[2,1]/sum(W4.cm[,1]),
-                          W5.cm[2,2]/sum(W5.cm[,2]), W5.cm[2,1]/sum(W5.cm[,1]),
-                          W6.cm[2,2]/sum(W6.cm[,2]), W6.cm[2,1]/sum(W6.cm[,1]),
-                          W7.cm[2,2]/sum(W7.cm[,2]), W7.cm[2,1]/sum(W7.cm[,1])
-                        )
-          
-          
-          
+            if (!key %in% names(sim_data)) {
+              stop("Scenario not found in sim_data: ", key, "\n",
+                   "Regenerate data with notebooks/Generate_Simulated_Data.R")
             }
-            metric_means <- colMeans(resul_mat, na.rm = TRUE)           # numérico
-            resul1 <- c(modelo, mode, dimension[i2], alpha[i1],
-                        outl_dist[i3], metric_means)                # 5 + 14 = 19
-            resul.t <- rbind(resul.t, resul1) 
-      }}}}}}
+            
+            scenario_list <- sim_data[[key]]
+            if (length(scenario_list) < iter) {
+              stop("Scenario ", key, " has only ", length(scenario_list),
+                   " replications; expected at least ", iter)
+            }
+            
+            cms_rows <- vector("list", iter)
+            
+            for (sim_id in seq_len(iter)) {
+              
+              data.sim <- scenario_list[[sim_id]]
+              X <- data.sim$x
+              
+              # Ground truth: lbl=0 clean (inlier), lbl=1 outlier
+              true_labels <- ifelse(as.integer(data.sim$lbl) == 1L, "2", "1")
+              true_labels <- factor(true_labels, levels = c("1","2"))
+              
+              # -------------------- Methods --------------------
+              
+              # DOBIN transform (used by your DSO pipeline)
+              calculated_dobin <- dobin::dobin(X)
+              dob_knn <- X %*% calculated_dobin$rotation
+              
+              # REPPlab (EPP)
+              X_EPP <- REPPlab::EPPlab(X, PPalg="PSO", PPindex="FriedmanTukey",
+                                       n.simu=1, maxiter=1000, sphere=TRUE)
+              out <- REPPlab::EPPlabOutlier(X_EPP, which = 1:ncol(X), k = 3,
+                                            location = mean, scale = sd)
+              aux_repp <- unlist(out$outlier)
+              threshold_repp <- stats::quantile(aux_repp, 0.95)
+              predicted_labels_repp <- ifelse(aux_repp > threshold_repp, "2", "1")
+              predicted_labels_repp <- factor(predicted_labels_repp, levels = c("1","2"))
+              W1.cm <- caret::confusionMatrix(predicted_labels_repp, true_labels)$table
+              
+              # HDO (depth-based)
+              out2 <- depthTools::hDepth(X)
+              threshold_hdod <- stats::quantile(out2, 0.05)
+              predicted_labels_hdod <- ifelse(out2 < threshold_hdod, "2", "1")
+              predicted_labels_hdod <- factor(predicted_labels_hdod, levels = c("1","2"))
+              W2.cm <- caret::confusionMatrix(predicted_labels_hdod, true_labels)$table
+              
+              # PP-MCD
+              W3.safe <- tryCatch({
+                out_values <- PPcovMcd::PPcovMcd(X)
+                Projection_pursuit_MCD <- stats::mahalanobis(X, center = out_values$center, cov = out_values$cov)
+                threshold_MCD <- stats::quantile(Projection_pursuit_MCD, 0.95)
+                pred <- ifelse(Projection_pursuit_MCD > threshold_MCD, "2", "1")
+                list(cm = caret::confusionMatrix(factor(pred, levels=c("1","2")), true_labels)$table, ok = TRUE)
+              }, error = function(e) {
+                list(cm = matrix(NA_integer_, 2, 2, dimnames = list(c("1","2"), c("1","2"))), ok = FALSE)
+              })
+              W3.cm <- W3.safe$cm
+              
+              # ICS
+              data_ics <- ICSOutlier::ics2(X)
+              resultado_ICS <- ICSOutlier::ics.outlier(data_ics, level.test = 0.3)
+              idx_ics <- resultado_ICS@outliers
+              predicted_labels_ics <- rep("1", nrow(X))
+              if (length(idx_ics)) predicted_labels_ics[idx_ics] <- "2"
+              predicted_labels_ics <- factor(predicted_labels_ics, levels = c("1","2"))
+              W4.cm <- caret::confusionMatrix(predicted_labels_ics, true_labels)$table
+              
+              
+              # DSO 
+              X_pp <- pena_prieto_transformation(X, calculated_dobin$rotation)
+              selected_data <- X_pp
+              
+              at_m <- calculate_outlyingness(selected_data)
+              pred_dso <- cluster_to_labels(at_m)
+              W5.cm <- caret::confusionMatrix(pred_dso, true_labels)$table
+              
+              r_i <- calculate_r_i(selected_data)
+              outlyingness_ajustado_SDC <- SDC(selected_data, r_i)
+              pred_sdc <- cluster_to_labels(outlyingness_ajustado_SDC)
+              W6.cm <- caret::confusionMatrix(pred_sdc, true_labels)$table
+              
+              outlyingness_ajustado_SDM <- SDM(selected_data)
+              pred_sdm <- cluster_to_labels(outlyingness_ajustado_SDM)
+              W7.cm <- caret::confusionMatrix(pred_sdm, true_labels)$table
+              
+              # -------------------- Store --------------------
+              cms_rows[[sim_id]] <- rbind(
+                cm_to_row(W1.cm, sim_id, dataset_name, "REPPLAB"),
+                cm_to_row(W2.cm, sim_id, dataset_name, "HDO"),
+                cm_to_row(W3.cm, sim_id, dataset_name, "PP-MCD"),
+                cm_to_row(W4.cm, sim_id, dataset_name, "ICS"),
+                cm_to_row(W5.cm, sim_id, dataset_name, "DSO"),
+                cm_to_row(W6.cm, sim_id, dataset_name, "DSO-SDC"),
+                cm_to_row(W7.cm, sim_id, dataset_name, "DSO-SDM")
+              )
+            }
+            
+            cm_block <- do.call(rbind, cms_rows)
+            
+            metrics_rows <- vector("list", nrow(cm_block))
+            idx <- 0L
+            for (sim_id in sort(unique(cm_block$simulation))) {
+              sub_sim <- cm_block[cm_block$simulation == sim_id, ]
+              for (mth in unique(sub_sim$method)) {
+                row <- sub_sim[sub_sim$method == mth, ]
+                cm <- matrix(c(row$TN, row$FN, row$FP, row$TP), nrow=2, byrow=TRUE,
+                             dimnames=list(c("1","2"), c("1","2")))
+                met <- calculate_metrics(cm)
+                idx <- idx + 1L
+                metrics_rows[[idx]] <- data.frame(
+                  simulation = sim_id, dataset = dataset_name, method = mth,
+                  t(met), stringsAsFactors = FALSE
+                )
+              }
+            }
+            metrics_rows <- metrics_rows[seq_len(idx)]
+            metrics_block <- do.call(rbind, metrics_rows)
+            
+            all_cm[[key]] <- cm_block
+            all_metrics[[key]] <- metrics_block
+            
+            write.csv(cm_block, file.path(out_dir, paste0("cm_", key, ".csv")), row.names = FALSE)
+            write.csv(metrics_block, file.path(out_dir, paste0("metrics_", key, ".csv")), row.names = FALSE)
+          }
+        }
+      }
+    }
+  }
+}
 
-#print("Experiment Symmetric TypeA has finished")
-save(resul.t, file = "Symm.RData")
-#save(resul.t,file = 'datos.xls')
+## Consolidate and export----
 
-write.csv(resul.t, "resul_t.csv", row.names=FALSE)
-write.csv(resul, "resul.csv", row.names=FALSE)
+cm_all <- do.call(rbind, all_cm)
+metrics_all <- do.call(rbind, all_metrics)
 
+write.csv(cm_all, file.path(out_dir, "confusion_ALL.csv"), row.names = FALSE)
+write.csv(metrics_all, file.path(out_dir, "metrics_ALL.csv"), row.names = FALSE)
 
-stopImplicitCluster()
+saveRDS(
+  list(cm = all_cm, metrics = all_metrics),
+  file = file.path(out_dir, "all_results.rds")
+)
 
-###########
-### FIN ###
-###########
+cat("\nOK. Results in: ", out_dir, "\n")
 
