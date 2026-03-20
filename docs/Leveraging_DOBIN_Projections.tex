@@ -1,0 +1,765 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish,english]{babel}
+%\usepackage{enumerate}
+\usepackage[none]{hyphenat}
+\usepackage{hyperref}
+\usepackage{natbib}
+\usepackage{url} % not crucial - just used below for the URL 
+\usepackage{mathtools}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{amsfonts}
+\usepackage{subfigure}
+\usepackage{microtype}
+\usepackage{float}
+\usepackage{rotating} 
+\usepackage{booktabs}
+\usepackage{authblk}
+\usepackage{tabularx}
+\usepackage{caption}
+\captionsetup[table]{justification=centering}
+
+
+
+\renewcommand{\arraystretch}{1.0}
+\DeclareMathOperator*{\argmax}{argmax}
+
+
+% DO not change margins - should be 1 inch all around.
+\addtolength{\oddsidemargin}{-.5in}%
+\addtolength{\evensidemargin}{-.5in}%
+\addtolength{\textwidth}{1in}%
+\addtolength{\textheight}{1.3in}%
+\addtolength{\topmargin}{-.8in}%
+
+
+\begin{document}
+\date{}
+%\bibliographystyle{natbib}
+
+\def\spacingset#1{\renewcommand{\baselinestretch}%
+{#1}\small\normalsize} \spacingset{1}
+
+\title{\bf Leveraging DOBIN Projections for Outlier Detection with Casewise and Cellwise Contaminations}\\
+
+% Configuración del tamaño y estilo de las afiliaciones
+\renewcommand\Authfont{\normalsize} % Tamaño normal para los autores
+\renewcommand\Affilfont{\small\itshape} % Tamaño pequeño y cursiva para las afiliaciones
+
+% Autores y afiliaciones
+\author[1]{Andrés Mauricio Cano}
+\author[2]{Santiago Ortiz}
+\author[3]{Héctor R. Quiceno}
+
+
+\affil[1]{{Independent Researcher, Colombia}}
+\affil[2]{Department of Mathematics and Statistics, Universidad Nacional de Colombia, Manizales, 170003, Colombia}
+\affil[3]{Institute of Mathematics, Universidad de Antioquia, Medellín, 050010, Colombia}
+
+\date{} % Sin fecha
+
+\maketitle
+
+\hrule %
+
+\begin{abstract}
+
+Accurate outlier detection is a critical challenge in data analysis, especially under high dimensionality scenarios and complex contaminations. This paper presents an approach that combines data huberization, robust projections based on the DOBIN method, and a Householder-inspired S-orthogonal transformation to assess outlyingness in dimensions with higher kurtosis and skewness. The method incorporates cellwise and casewise contamination strategies to simulate realistic scenarios and evaluate its performance. The results obtained through simulations under various types of contamination show that the proposed approach achieves proficient accuracy and robustness when compared to other outlier detection methods. These findings highlight the effectiveness of the proposal to identify complex anomalous structures in multivariate data, opening new possibilities for practical and theoretical applications in robust statistics.
+
+
+\end{abstract}
+
+\textit{Keywords:} Distance projections, Householder transformation, Stahel-Donoho estimator, $k$-means.
+
+\newpage
+
+\section{Introduction}
+
+Datasets often contain outliers, which are data points significantly different from the majority due to unique underlying mechanisms \citep{Maronna2006}. These outliers pose challenges in higher dimensions, impacting multivariate techniques that rely on location and scatter estimators \citep{PeñaPrieto2001b}. Addressing this issue requires robust estimation methods, some of which are based on projection pursuit methodologies, aiming to simplify the problem by reducing the sample-space dimensionality. A pioneering approach in this area is the Stahel-Donoho outlyingness (SD) estimator, introduced by \citet{Stahel1981} and \citet{Donoho1982}, with later variations, including those from \citet{vanAelst2016}. Recent advancements include methods based on random projections, such as the modified SD method for skewed distributions by \citet{Hubert2008}, and a technique using a specific threshold for random projections proposed by \citet{Navarro2021}.\\
+
+Most procedures with a high resistance to outliers are computationally intensive; not coincidentally, the availability of cheap computing resources has enabled this field to develop considerably in recent years. Among other advances, there currently exists a wide variety of statistical models ranging from regression to principal components \citep{Hubert2005} that can incorporate outliers without being unduly influenced, as well as several algorithms that explicitly focus on outlier detection. Despite the availability of faster computers, most robust methods are still computationally intensive and can only be used for data sets with a few hundred dimensions. For example, the robust estimation routines mentioned in the previous paragraph experience significant computational difficulties when applied to large data sets. However, with the improvement of data collection and storage facilities, such large data sets have become more common in recent years.\\
+
+Even though computers are getting faster, robust methods are still slow and can only be used for small data sets. This is a problem because large data sets are becoming more common. Researchers are working on developing faster robust methods, but this is an ongoing challenge \citep{Filzmoser2008}. There are several methods based on projection pursuit that we found in the seminal works of \citet{Huber1985, Friedman1987, Jones1987} and \citet{PenaPrieto2000}. Projection methods for outlier detection focus on optimizing certain statistical indices. Examples include the semi-robust principal components tailored for high-dimensional data \citep{Filzmoser2008}, and directions that amplify the distances of $k$-nearest neighbors (DOBIN) \citep{Kandanaarachchi2021}. A significant group of these statistical indices concentrates on optimizing the third and fourth sample moments. Such methods include the kurtosis optimization procedures presented in \citep{PeñaPrieto2001b,PeñaPrieto2007,PeñaPrietoViladomat,Ortiz2026} and the sample-skewness coefficient \citep{Loperfido2013, Loperfido2018,Ortiz2024}.\\
+
+DOBIN projections are not an outlier detection method but rather a preprocessing step that can be used by any outlier detection method to point in an unsupervised way the outliers from a data set \citep{Kandanaarachchi2021}. This method finds a set of basis vectors tailored for outlier detection. It finds the first basis vector in the direction of highest outlyingness, the second vector in the next direction of outlyingness, and so on. While versatile and efficient, the reliance of DOBIN on $k$-nearest neighbors (k-NN) distances introduces ambiguity in outlier criteria. The choice of \( k \) in k-NN is crucial; too small a \( k \) may miss outliers, while a large \( k \) risks falsely identifying non-outliers as outliers \citep{Ma2021}. This dependency on \( k \) necessitates exploration into alternative cutoff criteria for more precise outlier identification in DOBIN.\\
+
+The accuracy in separating DOBIN is not optimal, leading to the need to employ additional tools to improve the distinction of outliers. Its outlier detection criteria are unclear yet and could be inefficient due to its dependency on the k-NN distances. k-NN is a simple and effective method for outlier detection. Nevertheless, it has some weaknesses because of its sensitivity to the choice of $k$. If $k$ is too small, then the algorithm may not be able to identify outliers that are located far away from the rest of the data. If $k$ is too large, then the algorithm may identify too many data points as outliers, including some that are not outliers \citep{Ma2021}. The fact that it is not established an appropriate $k$ value to use in the calculation of distances when the DOBIN directions are pretended to be used, brings the possibility to work in the development of a cutoff alternative criteria in this sense.\\
+
+%A promising solution is the use of S-orthogonal projections, which have the potential to provide more detailed and relevant information. Although traditionally DOBIN directions are derived from k-NN, in this context an adaptation is proposed, taking advantage of the inherent features of the $k$-means algorithm. This adaptation seeks to enhance the ability to adequately identify and separate outliers in the data set. The advantages of using $k$-means over k-NN include its efficiency on large data sets, its ability to discover patterns and natural groupings, its iterative optimization process, and the clarity in the interpretation of the results thanks to the cluster centroids \citep{IKOTUN2023178}.\\
+
+We investigate an adaptation of the Stahel–Donoho estimator where we allow separate weights for each component of an observation. Before applying DOBIN, the data are first huberized to minimize the influence of extreme outliers and enhance the robustness of subsequent analyses \citep{S.VanAelstandE.VandervierenandG.Willems2012}. The huberization step ensures that the initial outlyingness measures are not overly dominated by extreme values, creating a stable foundation for the subsequent analysis. The idea is to start from the outlyingness of the observation as measured in the original Stahel–Donoho procedure. Subsequently, for each observation, we attempt to identify to what extent each variable contributes to the outlyingness and we use this information to adjust the original Stahel–Donoho weights in a cellwise manner \citep{VanAelst2010}. In particular, whenever an observation has a considerable outlyingness and hence a small Stahel–Donoho weight, the clean components should be restored to some extent by adjusting the corresponding weight upwards. By adapting the estimator in this way (using cellwise weights), we give up affine equivariance but can gain precision.\\ 
+
+Moreover, following the application of DOBIN, additional steps are taken to refine the results and leverage the advantages of its transformed directions. A promising solution is the use of S-orthogonal projections, which have the potential to provide more detailed and relevant information. Although traditionally DOBIN directions are derived from k-NN, in this context an adaptation is proposed, taking advantage of the inherent features of the $k$-means algorithm. This adaptation seeks to enhance the ability to adequately identify and separate outliers in the data set. The advantages of using $k$-means over k-NN include its efficiency in large data sets, its ability to discover patterns and natural groupings, its iterative optimization process, and the clarity in the interpretation of the results thanks to cluster centroids \citep{IKOTUN2023178}.\\
+
+The manuscript is structured to guide the development and validation of an outlier detection method. In Section \ref{sec:met} we describe the methodology in which we present the theoretical background and practical implementation of DOBIN projections and Householder transformations and the Stahel-Donoho estimator. In Section \ref{sec:prop} we present the outlier detection proposal based on S-Orthogonal directions computed by DOBIN projections. In Section \ref{sec:simare} some simulation experiments provide empirical evidence of the performance of our proposal, exploring cases of symmetric contamination, whereas in Section \ref{sec:applic} we show the performance of our proposal in varied real data applications. Finally, in Section \ref{sec:con} there are some conclusions of this work.
+
+\section{Methodology}\label{sec:met}
+
+%Outlier detection is a fundamental task in Data Science that involves identifying and analyzing data points that deviate significantly from the normal behavior or patterns observed in a data set. These outliers can arise due to various reasons such as measurement errors, data corruption, or genuinely unusual observations. It is well known that a few outliers in the data may arbitrarily distort the sample mean and the sample covariance matrix, therefore, the robust estimation of location and shape is a crucial problem in multivariate statistics \citet{PeñaPrieto2007}. In several applications with high-dimensional and large data sets, one way to avoid the curse of dimensionality is to search for outliers in univariate projections of the data.
+
+%\subsection{Projection Pursuit}
+%Projection pursuit is a statistical method that allows us to find the most $\lq interesting \rq$ possible projections of multidimensional data. Its idea is to locate the projections from high dimensional space to low dimensional space and signal the most details about the data set structure \citet{Tyler2009}. It is common to find that the projections with a non-Gaussian distribution are considered more interesting. As each projection is found, the dimension of the data is reduced by removing the component along that projection. This process is repeated to find new projections and from this procedure comes the $\lq pursuit \rq$ aspect.
+
+%A Projection Index is a mathematical function that assigns a real value to a data projection to measure its level of interest \citep{KRUSKAL1969} The higher the value of the index, the more interesting the projection is considered to be. Therefore, as explained in \citet{Loperfido2018}, the projection pursuit method aims to find the data projection that maximizes this Projection index. In that work, the author mentions that the optimization algorithm plays a crucial role in projection pursuit. So, the two basic elements of projection pursuit are the projection index and the optimization routine. Projection pursuit can be very demanding computationally, particularly when the algorithm struggles to handle the size and complexity of the data, resulting in an exponential increase in required time and memory.
+
+\subsection{DOBIN Projections}
+
+A common challenge in many domains is that a data point may be an outlier in the original high-dimensional space, but not an outlier in the low-dimensional subspace created by a dimension reduction method \citep{Kandanaarachchi2021}. DOBIN projections are not an outlier detection method but rather a preprocessing step. With an optimality criterion that maximises the sum of k-NN squared distances, DOBIN constructs a set of basis vectors that are aligned with the directions of maximum k-NN distances in the data. It is a versatile, simple, and efficient method that can be used with a variety of data types to improve the performance of outlier detection algorithms. Its two principal uses are a) dimension reduction for outlier detection, considering its capability to detect outliers in high-dimensional spaces and b) Visualization of outliers. In the context of DOBIN, let \( X \in \mathbb{R}^{n \times p} \) represent the original data matrix, where each row \( x_i \in \mathbb{R}^p \) corresponds to an observation. For each point \( x_i \), let \( Z_i = \{ z_{i1}, \dots, z_{ik} \} \subset \mathbb{R}^p \) be the set of the \( k \)-nearest neighbors of \( x_i \), where each \( z_{ij} = x_{j(i)} \) corresponds to the observation indexed by \( j(i) \in \{1, \dots, n\} \) that is the \( j \)-th nearest neighbor of \( x_i \). 
+
+Then, for each pair \( (x_i, z_{ij}) \), define the corresponding element-wise squared difference vector as:
+\[
+y_{ij} = (x_i - z_{ij}) \circ (x_i - z_{ij}),
+\]
+where \( \circ \) denotes the element-wise product. The collection of these vectors forms the so-called \( Y \)-space:
+\[
+Y = \{ y_{ij} \in \mathbb{R}^p \mid i = 1,\dots,n,\ j = 1,\dots,k \}.
+\]
+
+Each vector in \( Y \) represents a squared difference between an observation and one of its neighbors, encoding local distance structure in a coordinate-wise manner. This representation allows subsequent steps of the DOBIN algorithm to focus on directions of large local variability, which are more likely to reveal outlyingness.\\ 
+In the referred work \citet{Kandanaarachchi2021}, the authors used k-NN distances as a guiding principle and were interested in the $k$-nearest neighbors of a given point. If they were to calculate $y_{ij}$ for all pairs, it would be computationally expensive as there are $n(n - 1)/2$ pairs to consider. In addition, this would give them pairwise distances between points such as points on the boundary of the point cloud, that are opposite each other. Finding $\eta$ that maximizes the distances between such points is not beneficial for outlier detection, because a large distance between polar opposite points does not mean that either of those points are outliers. Therefore, it is unnecessary to compute $y_{ij}$ for all pairs of $x_i$ and $x_j$; instead, the pairs that are intended to be included in the $Y-space$ should be selected.\\
+
+
+The goal is to find a direction \( \eta \in \mathbb{R}^p \) that maximizes the sum of projected distances between selected point pairs, subject to the constraint \( \|\eta\| = 1 \). In this particular case, the optimal direction is obtained as $
+\eta = \frac{\sum_\ell y^{(\ell)}}{\left\| \sum_\ell y^{(\ell)} \right\|}$, where each \( y^{(\ell)} \in \mathbb{R}^p \) is a vector of element-wise squared differences between a point and one of its nearest neighbors. This optimization step is fundamental for constructing a basis of directions in the DOBIN method. The number of DOBIN directions \( d \) to retain can be determined in one of two ways. Since each direction \( \eta_i \) is constructed to capture the maximum remaining projected distance (or local variability) orthogonal to the previous directions, the process can theoretically continue until \( d = p \). However, in practice, it is common to monitor the amount of variance explained by each new direction. Once the additional variance contributed by a new direction becomes negligible — i.e., the marginal gain in projected distance stabilizes or decreases significantly- the process can be stopped early. This approach is similar in spirit to principal component selection in PCA, and is also discussed in \citet{Kandanaarachchi2021}, where the authors suggest retaining only those directions that meaningfully contribute to detecting local outlyingness.
+
+
+
+\subsection{Householder Transformations}\label{sec:Hh}
+
+The Householder transformation \citep{householder1958} is a widely used mathematical tool in linear algebra, especially in the QR factorization of matrices. This transformation is employed to convert a matrix into a simpler form while retaining its essential properties. Essentially, a Householder reflection is a linear transformation that reflects a given vector over a mirror plane or hyperplane. Given a vector $v\in\mathbb{R}^p$, the Householder transformation associated with $v$ is the matrix $H$ defined as:
+
+\begin{equation}\label{eq:householder}
+    H = I - 2 \frac{v v^\top}{v^\top v},
+\end{equation}
+
+where $I$ is the $p$-dimensional identity matrix. Some interesting properties of this type of reflection are a) $H^\top = H$, b) $H^\top H = HH^\top = I$ and c) $H^2 = I$.
+
+%A typical application of the Householder transformation is to turn all elements of a vector, except the first one, into zero. Given a vector \( \mathbf{x} \) and assuming \( \mathbf{e}_1 \) is the first canonical vector, the vector \( \mathbf{v} \) can be computed as:
+
+%\[
+%\mathbf{v} = \mathbf{x} + \text{sign}(x_1) \|\mathbf{x}\| \mathbf{e}_1
+%\]
+
+%where \(\text{sign}(x_1)\) is the sign of the first element of \( \mathbf{x} \) and \( \|\mathbf{x}\| \) is the Euclidean norm of \( \mathbf{x} \).
+
+\subsubsection*{S-Orthogonal Reflections}
+
+Applications of reflection-based transformation have been proposed for both clustering and outlier detection problems \cite{DanielPeñaandFranciscoJPrieto2001, PeñaPrieto2007}. Specifically, in \citet{DanielPeñaandFranciscoJPrieto2001} it is proposed a novel procedure for cluster identification based on orthogonal transformations of directions that minimizes the sample kurtosis coefficient of projected data. These reflections are computed through a modified Householder transformation, in which the sample covariance matrix $S$ of the multivariate data is introduced in Equation \eqref{eq:householder}. This transformation, which considers the dependence structure of the multivariate data, is denoted as an S-Orthogonal reflection. The implementation of these reflection directions becomes particularly useful when a masking effect occurs between cluster groups in the initial projection direction. Consequently, these S-Orthogonal projections aim to identify the presence of clusters by maximizing the bimodality/multimodality property along the given direction.\\
+
+The formal procedure is as follows: Let us consider a multivariate sample $X=(x_1,\dots,x_n)$ a unitary projection direction $d_j\in\mathbb{R}^p$ and the projection of $X$ onto $d_j$ as $Y=d_j^\topX$. Moreover, denote the estimators of multivariate location and scatter of $X$ as $\bar{x}=n^{-1}\sum_{i=1}^n x_i$ and $S=(n-1)^{-1}\sum_{i=1}^n(x_i-\bar{x})(x_i-\bar{x})^\top$, respectively. Then, project the observations onto a subspace $Q$ that is $S-$orthogonal to the direction $d_j$ as
+
+\begin{equation}\label{eq:S-Househ}
+    Q_j=I-\frac{1}{d_j^\top Sd_j}d_j d_j^\top S,
+\end{equation}
+
+where $Q_j$ denotes a S-Householder reflection matrix. Finally, the univariate S-Orthogonal reflection of X is denoted by $X_H=Q_jX$ and, consequently, the S-Orthogonal projection of $X$ is denoted as $Y_H=d_j^\topX_H$. 
+
+
+\subsection{Stahel-Donoho Estimator}
+
+The Stahel-Donoho (SD) estimator, proposed independently by \citet{Stahel1981} and \citet{Donoho1982}, is a robust estimator of multivariate location and scatter. The estimator is defined as a weighted mean and covariance matrix, where the weights are based on a measure of outlyingness. The outlyingness measure is based on the one-dimensional projection in which the observation is most outlying. The weights are then used to downweight the most outlying observations. The SD estimator has a high breakdown point, which means that it can withstand a large proportion of outliers without being significantly affected. The estimator is also affine equivariant, which means that it is not affected by changes in scale or location \citep{S.VanAelstandE.VandervierenandG.Willems2012}.\\
+
+Given a multivariate sample $X=(x_1,\dots,x_n)$ and $S_p=\{\eta \in\mathbb{R}^p:||\eta||_2=1\}$ the set of all unitary projection directions, the SD outlyingness (SDO) of a data point $x_i$ onto a direction $\eta_j\in S_p$ is typically computed as the distance between the projected observations $\eta_j^\topx_i$ and a univariate location estimation $\mu(\cdot)$, re-scaled by a univariate scatter estimation $\sigma(\cdot)$; to make the SDO a robust measure $\mu(\cdot)$ and $\sigma(\cdot)$ are usually the sample median and MAD statistics, respectively. Therefore, for any $x_i$ the SDO$(x_i)$ is defined as
+\begin{equation*}\label{EQ2}
+    \text{SDO}(x_{i},X)=\max_{\eta_j^\top\in S_p}\frac{\left|\eta_j^\top x_{i}-\text{median}(\eta_j^\top X)\right|}{\text{MAD}(\eta_j^\top X)}.
+\end{equation*}
+
+Large outlyingness values indicate what points are particularly atypical relative to the rest of the main bulk of the data but, an outlyingness value close to 0 indicates that the point is close to the median and hence is not atypical. Thus, the robust SD estimator for multivariate location and scatter is defined as
+\begin{equation*}\label{EQ3}
+    {\hat{\mu}}_{SD} = \frac{\sum_{i=1}^{n}w_ix_i}{\sum_{i=1}^{n}w_i}\quad\text{and}\quad{\hat{S}}_{SD} = \frac{\sum_{i=1}^{n}w_i(x_i-{\hat{\mu}}_{SD})(x_i-{\hat{\mu}}_{SD})^\top}{\sum_{i=1}^{n}w_i},
+\end{equation*}
+	
+where $w_i\equiv w(\text{SDO}(x_i)):\mathbb{R}^+\rightarrow\mathbb{R}^+$ is a weight function, which penalizes or down-weights observations with large outlyingness. There are several approaches in the literature for $w$, such as Hard-rejection, Tukey biweight, among others \citep{Maronna2006}.
+
+
+\subsubsection{Huberized outlyingness}
+
+%-------------
+
+The huberization process, as it is explained in \citep{S.VanAelstandE.VandervierenandG.Willems2011}, is applied to the data matrix $\mathbb{X}  =  x_{ij}$, where $x_{ij} \in\mathbb{R}^{n\times p} $ represents the $j$-th component of the $i$-th observation . Each element is modified as follows:
+
+$$
+x_{ij,H} =
+\begin{cases}
+\text{MED}(X_j) - c_H \cdot \text{MAD}(X_j) & \text{if } c_{ij} < -c_H, \\
+x_{ij} & \text{if } -c_H \leq c_{ij} \leq c_H, \\
+\text{MED}(X_j) + c_H \cdot \text{MAD}(X_j) & \text{if } c_{ij} > c_H,
+\end{cases}
+$$
+\\
+where $c_{ij} = \frac{x_{ij} - \text{MED}(X_j)}{\text{MAD}(X_j)}$, $x_{ij,H}$ denotes de $j$-th component of $x_{i,H}$,  $\text{MED}(X_j)$ is the median of the $j$-th variable, and $\text{MAD}(X_j)$ represents the Median Absolute Deviation (MAD), computed as:
+
+$$
+\text{MAD}(X_j) = \text{MED}(|X_j - \text{MED}(X_j)|).
+$$
+
+The parameter $c_H$ determines the huberization threshold, controlling the extent to which extreme values are adjusted. A common choice, also used in this work, is $c_H = \Phi^{-1}(0.975)$.
+
+After huberization, the \textbf{huberized outlyingness} for an observation $y \in \mathbb{R}^p$ is defined as:
+
+$$
+r_H(x_i, X) = \sup_{\eta \in S_p} \frac{|x_i^\top \eta - \mu(X_H \eta)|}{\sigma(X_H \eta)},
+$$
+
+where $X_H \eta$ represents the projection of the huberized data $X_H$ onto the direction $\eta$, $\mu(X_H \eta)$ is the median of the projected data, $\sigma(X_H \eta)$ is the modified MAD of the projected data, given by $\operatorname{MAD}^*(X \eta)=
+\frac{\;\left|X \eta-\operatorname{MED}(X \eta)\right|_{\lceil\frac{n+p-1}{2}\rceil : n}\;
+      +\;\left|X \eta-\operatorname{MED}(X \eta)\right|_{\lfloor\frac{n+p-1}{2}\rfloor : n}}
+     {2\,\beta}$ with $\beta$ as a scaling constant.\\
+
+The huberization process reduces the influence of outliers by adjusting extreme values toward the center of their respective distributions. This adjustment enhances the robustness of the Stahel–Donoho estimator in detecting multivariate outliers, particularly under heavy contamination. Unlike complete removal of outliers, huberization retains the structure of the data while minimizing the masking and swamping effects, which often impair outlier detection methods.
+
+\subsubsection{Adapted Stahel-Donoho with Cell-wise Weights}
+
+
+The methodology presented in the work \citep{VanAelst2010} introduces a robust extension of the traditional Stahel-Donoho (SD) estimators. The adapted version addresses the challenges posed by \textbf{cellwise contamination}, where individual cells in a data matrix may be corrupted independently. The classic SD estimator computes robust measures of location and scatter based on the projection outlyingness of data points, where the weights \( w_i \) are determined by a Huber-type function of the outlyingness \( r(x_i, X) \):
+\[
+w(r_i) = (r_i \leq c) + \left( \frac{c}{r_i} \right)^2 (r_i > c)
+\]
+
+with the threshold \( c = \min\{\chi^2_p(0.5), 4\} \), where \( \chi^2_p(0.5) \) denotes the median of a chi-squared distribution with \( p \) degrees of freedom. An important property of this formulation is that the adapted outlyingness always satisfies
+\[
+r_{ij} \leq r_i,
+\]
+which implies that
+\[
+w_{ij} \geq w(r_i) = w_i.
+\]
+Since the weight function \( w(\cdot) \) is decreasing, this guarantees that the cellwise weights are always at least as large as the corresponding global (casewise) weight. This makes the adapted estimator more conservative by preserving uncorrupted components of potentially outlying observations. This weighting scheme downweights outliers while preserving efficiency under clean data. So, the key modifications include:
+\begin{itemize}
+    \item A new weighting scheme that combines global outlyingness ($r_i$) and cellwise outlyingness ($c_{ij}$):
+    \[
+r_{ij} = \alpha_{ij} r_i + (1 - \alpha_{ij}) c_{ij}, \quad
+w_{ij} = w(r_{ij}),
+\]
+
+    where \(\alpha_{ij} \in [0, 1]\) is a data-driven weight balancing global and cellwise contributions. Its computation depends on the specific variant of the estimator:
+\begin{itemize}
+    \item SDH: \(\alpha_{ij} = \mathbb{I}\{ c_{ij} < c_H \}\),
+    \item SDC: \(\alpha_{ij} = \mathbb{I}\{ r_i < c_H \}\),
+    \item SDM: \(\alpha_{ij} = \min\left\{ \frac{r_i}{c_H}, \frac{c_{ij}}{c_H} \right\}\),
+\end{itemize}
+with \(c_H\) being a fixed threshold, typically \( \Phi^{-1}(0.975) \).
+
+
+    \item The cellwise outlyingness $c_{ij}$ is defined as:
+    \[
+    c_{ij} = \frac{|x_{ij} - \text{MED}(X_j)|}{\text{MAD}^*(X_j)},
+    \]
+    where $\text{MED}$ and $\text{MAD}^*$ are the median and modified median absolute deviation for variable $j$.
+
+    \item The adapted location and scatter estimators are:
+    \[
+    T^*_{SD,j} = \frac{\sum_{i=1}^n w_{ij} x_{ij}}{\sum_{i=1}^n w_{ij}}, \quad
+    S^*_{SD,jk} = \frac{\sum_{i=1}^n \sqrt{w_{ij} w_{ik}} (x_{ij} - T^*_{SD,j})(x_{ik} - T^*_{SD,k})}{\sum_{i=1}^n \sqrt{w_{ij} w_{ik}}}.
+    \]
+    Note that the square root \( \sqrt{w_{ij} w_{ik}} \) appears in both the numerator and denominator of the scatter estimator \( S^*_{SD,jk} \).  
+    This construction ensures that the contribution of each observation is symmetrically scaled across variables \( j \) and \( k \), preserving a form of partial affine equivariance—a property important for robust multivariate estimation in the presence of cellwise contamination.
+\end{itemize}
+\\
+
+The method is robust against \textbf{cellwise contamination}, a pattern that often arises in high-dimensional, real-world data sets.  
+By introducing cellwise weights, the estimator preserves the information carried by uncontaminated cells within otherwise corrupted rows, thereby often improving statistical efficiency and reducing bias.  
+This extension overcomes a key limitation of the classical Stahel–Donoho estimators, which implicitly assume casewise contamination and consequently discard an entire observation once it is flagged.  
+The adapted SD estimators are thus particularly attractive when contamination is sparse and localized, and they show superior performance in simulation studies—most notably under \emph{independent} cellwise contamination. Notwithstanding the foregoing, as highlighted by \citet{VanAelst2010}, the gains just described hinge on the contamination mechanism.  
+When the data contain \emph{structural} outliers—e.g.\ several strongly correlated variables being perturbed simultaneously—the algorithm may mis-identify the contributing cells and, in doing so, \emph{increase} the bias relative to the original SD estimator.  
+Hence the efficiency gains under cellwise contamination should be weighed against a potential loss of robustness in such highly correlated settings.
+
+
+
+\section{Description of the Proposed Method}\label{sec:prop}
+
+This section presents the outlier selection method based on the analysis of the projections and transformations mentioned in Section \ref{sec:met}. The proposed method uses DOBIN projection as a preprocessing step for outlier detection, identifying basis vectors focused on detecting outliers. Starts with the direction of highest outlyingness, followed by subsequent directions. Then, the S-Householder transformation, as a starting point, is used to simplify matrices by reflecting vectors over a hyperplane while retaining essential properties. Subsequently, a selection of the components to be evaluated is made, taking into account the shapes of the distributions, to finish by calculating the outlyingness and labeling the outliers using a $k$-means algorithm. We have denoted our procedures as DOBIN S-Orthogonal (DSO), DOBIN S-Orthogonal - Scaled Direction Calibration (DSO-SDC) and DOBIN S-Orthogonal - Scaled Direction Modulation.\\
+
+The three proposed variants share the same pipeline and differ only in how outlyingness is attributed to individual components. All three produce a scalar outlyingness score per observation as the maximum over a per-component adapted score $r_{ij} = \alpha_{ij} r_i + (1-\alpha_{ij}) c_{ij}$, where $r_i$ is the global  (casewise) huberized outlyingness and $c_{ij}$ is the raw componentwise outlyingness. The simplest variant, DSO, sets $\alpha_{ij} = 0$, reducing to the maximum componentwise MAD score with no cross-component blending
+— a natural baseline that treats each transformed direction independently. DSO-SDC sets $\alpha_{ij} = c_{ij}/\max_k c_{ik}$, giving each component a weight proportional to its relative contribution to the observation's total componentwise outlyingness, in this case clean components (small $c_{ij}$) of a globally outlying observation are down-weighted toward their own local score, preserving information from uncontaminated cells. DSO-SDM instead defines $\alpha_{ij}$ using scores computed on MAD-rescaled data, making the weights invariant to scale differences across components and better suited to detecting outliers whose deviations are concentrated in a dominant direction after scale normalization \citet{VanAelst2010}. \\
+
+Let $X=(x_1,x_2,\dots,x_n)$ be a $p$-dimensional random sample. For a direction $u \in \mathbb{R}^p$ with $||u||_2= 1$, we define $t_i = u^\top x_i$. For the sample, projected onto this direction, $T = (t_1,\dots , t_n)$, we define
+\begin{equation*}
+    m_3 = \frac{\displaystyle \frac{1}{n} \sum_{i=1}^n t_i^3}{\displaystyle \left( \frac{1}{n} \sum_{i=1}^n t_i^2 \right)^{3/2}} , \qquad m_4 = \frac{\displaystyle \frac{1}{n} \sum_{i=1}^n t_i^4}{\displaystyle \left( \frac{1}{n} \sum_{i=1}^n t_i^2 \right)^2} - 3 ,
+\end{equation*}
+corresponding to the sample skewness, $m_3$, and kurtosis excess, $m_4$, coefficients of the projected sample $Y$. The algorithm proceeds through the following steps:
+
+\begin{enumerate}
+    \item Compute direction $\eta_1$ as the solution of the optimization problem
+    \begin{equation*}
+            \argmax_{\eta_1}\; \sum_{i\neq j}\langle \eta_1, (x_i-x_j)\circ(x_i-x_j)\rangle,\quad\text{s.t.}\quad ||\eta_1||_2 = 1\\
+    \end{equation*}
+        where $\langle \cdot,\cdot\rangle$ denotes the standard inner product in $\mathbb{R}^p$ and $\circ$ denotes the element-wise vector product.
+            
+    \item Compute $\eta_2, \eta_3, \dots, \eta_p$, the set of $p-1$ unit projection directions that are orthogonal to each other in a way described by \citet{Kandanaarachchi2021}. Let $t^{(j)}_i = \eta_j^\top x_i$ for $j=1, \dots, p$ and $i=1, \dots, n$.
+    
+
+    \item Compute the S-Orthogonal reflection matrix $Q_j$ as described in Equation \eqref{eq:S-Househ} for each projection direction $\eta_j$, and compute the S-Orthogonal projection of $T^{(j)}$ as $T^{(j)}_H = \eta_j^\top Q_j X$ for $j = 1, \dots, p$. Define $U = \left\{ T^{(j)}, T^{(j)}_H \right\}$ as the set with the $2p$ univariate projections.
+
+
+    \item For each $W_l\in U$ $(l=1,\dots,2p)$ compute the statics $C(w_l)= m_3(W_l)^2+m_4(W_l)^2$, which denotes the linear combination of squared sample skewness and kurtosis excess of projected data. This kind of statistic has been proposed and discussed by \citet{DAgostino1973}, \citet{Jones1987}, among others. The idea is to select the projections that guarantee a certain level of multimodality, according to high values of these moment coefficients. As we have mentioned previously, projections that maximizes/minimizes the skewness and kurtosis have been proposed in \cite{PeñaPrieto2001b}, \citet{PeñaPrieto2007}, \citet{Loperfido2018} and \citet{Ortiz2019}.
+
+    \item Compute $M=\text{median}(C(W_1),C(W_2),\dots,C(W_{2p}))$, denote as $C^*(W_l)$ the projections that satisfies $C(W_l)>M$ and draw a sample with the corresponding $W^*_l$ and store them in a set denoted as $U^*$. This implies that only components whose composite coefficient $C(W_l)$ exceeds $M$ are selected.
+
+   
+
+%--------
+
+    \item {Compute the Huberized outlyingness with cellwise weights}
+
+\begin{enumerate}
+    \item {Huberize each selected projection.} For each \( W_l \in U^* \), apply univariate huberization:
+    \[
+    w_{li,H}= 
+    \begin{cases}
+    \operatorname{med}(W_l)-c_H\operatorname{MAD}(W_l), & c_{li}< -c_H,\\
+    w_{li}, & -c_H\le c_{li}\le c_H,\\
+    \operatorname{med}(W_l)+c_H\operatorname{MAD}(W_l), & c_{li}> c_H,
+    \end{cases}
+    \qquad 
+    c_{li}= \dfrac{w_{li}-\operatorname{med}(W_l)}{\operatorname{MAD}(W_l)},
+    \]
+    Let \( X_H = (w_{li,H})_{i,l} \) denote the matrix of huberized projections.
+
+    \item {Compute the global huberized outlyingness.}
+    \[
+    r_i^{H}= \max_{l=1,\dots,|U^*|}\;
+    \frac{\left|w_{li,H}-\operatorname{med}(W_{l,H})\right|}
+         {\operatorname{MAD}^{*}(W_{l,H})},\]
+     \[    
+    \operatorname{MAD}^{*}(W_{l,H})=
+    \frac{|W_{l,H}-\operatorname{med}(W_{l,H})|_{h:n}+|W_{l,H}-\operatorname{med}(W_{l,H})|_{h+1:n}}
+         {2\beta},
+    \]
+    with \( h = (n+p-1)/2 \) and \( \beta = \Phi^{-1} \left( \frac12 \left( \frac{h}{n} + 1 \right) \right) \) .
+
+    \item {Compute the cellwise outlyingness.}
+    \[
+    c_{li}^{H}= \frac{|w_{li,H}-\operatorname{med}(W_{l,H})|}
+                    {\operatorname{MAD}^{*}(W_{l,H})},\qquad
+    r_{li}^{*}= \alpha_{li} r_i^{H} + (1-\alpha_{li})\,c_{li}^{H},
+    \]
+    where \( \alpha_{li}\) follows the SDC and SDM schemes.
+
+    \item{Compute the huberized weight for each component.}
+    \[
+    w_{li}= \mathbb(r_{li}^{*}\le c)+\left(\frac{c}{r_{li}^{*}}\right)^{2}\mathbb(r_{li}^{*}>c),\qquad
+    c=\min\!\left\{\sqrt{\chi^{2}_{p}(0.5)},\,4\right\}.
+    \]
+
+    \item{Define the final outlyingness score for observation \( x_i \).}
+    \[
+    \operatorname{SDO}_{\text{H\,cell}}(x_i)=\max_{l} r_{li}^{*}.
+    \]
+\end{enumerate}
+
+This scheme integrates univariate huberization \citep{VanAelst2010} with cellwise downweighting \citep{S.VanAelstandE.VandervierenandG.Willems2012}, ensuring that \( w_{li} \ge w_i \) and enhancing robustness under sparse cell contamination.
+
+
+    \item Finally, compute a $k$-means algorithm \citep{mcqueen1967smc}, for $k=2$ centers, and denote as $\overline{O}_1$ the set of all non-outliying points, i.e., if $x_i$ belongs to the largest cluster. Therefore, denote as $\overline{O}_2$ the set of all outlying points, i.e., if $x_i$ does not belong to the largest cluster. This idea is under the fact that, in outlier detection problems, the proportion of outlying points on a sample $\alpha$ should satisfy that $\alpha\in(0,0.5)$, thus, $|\overline{O}_2|<|\overline{O}_1|$ and $|\overline{O}_2\cup\overline{O}_1|=n$.\\
+
+    This step aimed to effectively separate outliers from the rest of the data, categorizing the data into two distinct clusters based on their outlyingness values. This clustering approach provided a clear demarcation between typical and atypical data points.
+\end{enumerate}
+
+The algorithm ends by returning the sets $\overline{O}_2,\;\overline{O}_1$ and the corresponding labeled observations.
+
+\section{Numerical Experiments}\label{sec:simare}
+
+%It is necessary to apply the method described in \ref{sec:met} to analyze the behavior of this modified version of DOBIN directions usage in which a proposed transformation is considered in the search for univariate directions of interest.
+The experiments presented here are analogous to those presented in \citep{PeñaPrieto2007} and compare the performance of the proposed method through the identification of outliers using two measures which are the \textit{average true detection rate} (c) and the \textit{average false detection rate} (f) as well as their corresponding overall averages in each instance. For this simulation, different methods known in the literature have been selected to compare the result of the proposed method in different scenarios. The proposed methods are the following: Exploratory Projection Pursuit by \citep{Fischer2021}, High-Dimensional Outlier Detection by \citep{Navarro2021}, The projection Pursuit Minimum Covariance Determinant \citep{PokojovyJobe2022} and the Invariant Coordinate Selection \citep{Archimbaud2018}. \\
+
+
+
+All simulations were performed using the R statistical software \citep{R2024}. 
+
+For the Exploratory Projection Pursuit (EPP), the \texttt{EPPlab} and \texttt{EPPlabOutlier} functions from the \texttt{REPPlab} package \citep{R-REPPlab} were used, with the \texttt{PSO} algorithm and the Friedman-Tukey index. The High-Dimensional Outlier Detection (HDOD) was implemented following projection-based methodologies, using robust quantile thresholds computed through custom functions, while leveraging random projections generated with the \texttt{rnorm} function from base R. The Projection Pursuit Minimum Covariance Determinant (PP-MCD) estimator was computed using the \texttt{PPcovMcd} function from the \texttt{PPcovMcd} package \citep{R-PPcovMcd}, with default arguments. For the Invariant Coordinate Selection (ICS), the \texttt{ics2} and \texttt{ics.outlier} functions from the \texttt{ICSOutlier} package \citep{R-ICSOutlier} were used. The \texttt{level.test} parameter was adjusted to $0.1$ to increase sensitivity to outliers. The DOBIN projection and transformation were computed using the \texttt{dobin} function from the \texttt{dobin} package \citep{R-dobin}, with default arguments. S-Orthogonal transformations and subsequent outlier detection, including SDC and SDM adaptations, were implemented using custom functions based on kurtosis and skewness analysis, leveraging the \texttt{kurtosis} and \texttt{skewness} functions from the \texttt{e1071} package \citep{R-e1071}. For all calculations involving clustering, the \texttt{kmeans} function from base R was employed to separate the data into two clusters. Finally, the confusion matrices were computed using the \texttt{confusionMatrix} function from the \texttt{caret} package \citep{R-caret}, with the true and predicted labels aligned. This combination of packages and functions ensured robust, efficient, and reproducible simulations throughout the study.
+
+
+%These methods were evaluated against two key metrics: True Positive $(TP)$ and False Positive $(FP)$. $TP$ indicates how many true outliers were correctly identified by the method, while $FP$ indicates how many normal values were incorrectly identified as outliers.
+
+\subsection{Simulation Framework}
+
+Consider a \( p \)-dimensional random variable \( X = (1 - \alpha)X_u + \sum_{j=1}^{2} \frac{\alpha}{2} X_{oj} \), obtained as a mixture of normal distributions that comes from a fully dependent contamination model \citep{Alqallaf2009}. Let \( X_u \sim N_p({e_0}, I) \), \( X_{o1} \sim N_p(\delta {e}, \lambda I) \), and \( X_{o2} \sim N_p(-\delta {e}, \lambda I) \), for \( \delta \neq 0 \), \( \lambda > 0 \), where \( {e_0} \) and \( {e} \) denote the \( p \)-dimensional vectors of zeros and ones, respectively. This experiment has been conducted for \( \alpha = 0.05, 0.1, 0.2, 0.3, 0.4 \), \( p = 10, 30, 50 \), \( \lambda = 0.5 \) and \( \delta = 3, 4 \). The sample size is defined as \( n = 10p \) and \( m = 500 \) random repetitions have been generated.\\
+
+In addition, we consider three modes of contamination generation to assess the robustness and performance of the methods. Specifically, we have a single-cluster contamination model, in which all outliers come from a single shifted distribution \(N_p(\delta\,e,\lambda I)\). This corresponds to the scenario where \(\sum_{j=1}^{1}\frac{\alpha}{1} X_{oj}\) is used, placing all outliers in the same region of the space.\\
+
+Additionally, two outlier clusters are introduced, generated by \(N_p(\delta\,e,\lambda I)\) and \(N_p(-\delta\,e,\lambda I)\) respectively, thus yielding a pair of well-separated groups of outliers. Finally,  complexity increases by generating four outlier clusters, each with its own location shift in distinct directions, providing a more challenging contamination setting where outliers are dispersed in multiple “corners” of the feature space.\\
+
+All of these scenarios build on the fully dependent contamination framework described above. Hence, in our experiments, we explore these three contamination modes (single- vs.\ multi-cluster) across the same range of \(\alpha\), \(\delta\), and \(\lambda\) values, with \(\alpha = 0.05, 0.1, 0.2, 0.3, 0.4\), dimensions \(p=10, 30, 50\), and \(\delta = 3, 4\). The sample size is still \(n = 10p\) and we perform \(m=500\) random repetitions in each setting.\\[0.35em]
+
+To complement the casewise contamination above, we also consider \textit{cellwise contamination} in the sense of \citet{Alqallaf2009}. Let \(Y_i \stackrel{\text{i.i.d.}}{\sim} N_p(e_0,I)\) be clean rows and let \(B=(B_{ij})\in\{0,1\}^{n\times p}\) be an i.i.d.\ Bernoulli mask with \(\mathbb{P}(B_{ij}=1)=\alpha\). Conditional on \(B\), contaminated entries are replaced by normal draws with shifted mean and reduced/inflated variance:
+\[
+X_{ij} \;=\; (1-B_{ij})\,Y_{ij} + B_{ij}\,Z_{ij}, 
+\qquad
+Z_{ij}\,\big|\,g \sim N\!\big(\mu^{(g)}_{j},\,\lambda\big),
+\]
+where the shift vector \(\mu^{(g)}\in\{\pm \delta\}^p\) depends on the contamination mode \(g\in\{1,2,3\}\):
+\[
+\mu^{(1)}=\delta e
+,\qquad
+\mu^{(2)}\in\{\delta e,-\delta e\}\ \text{with prob.\ }1/2
+,\qquad
+\mu^{(3)}\in\{\pm\delta\}^p\}.
+\]
+Thus, in FICM each cell is independently contaminated with probability \(\alpha\). For evaluation at the row level, the latent label is
+\(
+y_i=\mathbb{I}\{\sum_{j=1}^p B_{ij}>0\},
+\)
+so the expected fraction of contaminated rows equals
+\(
+\pi_{\text{row}}=1-(1-\alpha)^p
+\)
+and increases with \(p\). All remaining factors (\(\delta,\lambda,p,n,m\)) coincide with the FDCM design to ensure comparability.
+
+
+For the fully dependent (rowwise) mechanism, mode \(g=1,2,3\) corresponds to \(k=1,2,4\) location shifts, respectively, implemented via
+\[
+X \sim (1-\alpha)\,N_p(e_0,I)\;+\;\sum_{\ell=1}^{k}\frac{\alpha}{k}\,N_p\!\big(\mu^{(\ell)},\lambda I\big),
+\]
+with \(\mu^{(1)}=\delta e\), \(\{\mu^{(1)},\mu^{(2)}\}=\{\delta e,-\delta e\}\) for \(k=2\), and four orthants for \(k=4\). The same three modes are mirrored in FICM through the sign pattern of \(\mu^{(g)}\) in the definition of \(Z_{ij}\) above.
+
+
+For each combination \((\alpha,p,\delta,\lambda)\) and for each mode \(g\), we generate \(m\) independent datasets of size \(n=10p\). Methods produce predicted labels \(\hat y_i\in\{0,1\}\) at the row level, which are compared with \(y_i\) to build the confusion matrix and compute c and f. We report table summaries of the averages across \(m\) replications. In rare replications where the denominator of a rate is zero (e.g., no positives or no negatives), the corresponding rate is undefined; these values are recorded as NA and excluded from the averages, and we additionally monitor the NA proportion per scenario for transparency.
+
+
+All simulations use the same grids for \(\alpha,p,\delta,\lambda\) under both mechanisms (FDCM/FICM), identical sample sizes, and fixed random seeds per scenario; code is available upon request.
+
+
+
+\subsubsection*{FDCM Asymmetric Contamination with one outlier group}
+
+Table~\ref{tab:asym_one_group} shows that the DOBIN-based methods obtain satisfactory results across the grid. On average, DSO and DSO-SDC attain \(\text{c}\approx0.99\) with \(\text{f}\approx0.01\), while DSO-SDM reaches \(\text{c}=1.00\) and \(\text{f}\approx0.01\). This performance is essentially invariant to dimension \((p\in\{10,30,50\})\), contamination \((\alpha\in[0.05,0.40])\) and outlier distance \((\delta\in\{3,4\})\). The most adverse scenario \((p=10,\alpha=0.40,\delta=3)\) is even informative: DSO and DSO-SDC drop to \((0.86,0.13)\), whereas DSO-SDM preserves a better trade-off \((0.94,0.07)\) and improves when \(\delta=4\) \((0.98,0.02)\). HDOD is the strongest non-DOBIN competitor (average \((0.95,0.02)\)). Its weakness is limited to low dimension under heavy contamination: at \(p=10,\alpha=0.40,\delta=3\) it falls to \((0.24,0.00)\), but recovers at \(\delta=4\) \((0.67,0.00)\) and remains \(\ge 0.96\) for \(p\ge 30\) across \(\alpha\). PP-MCD is sensitive to \(\alpha\): it performs well only at \(\alpha=0.05\) (c \(=1.00\) for all \(p\), \(\text{f}=0.00\)), drops to \(0.50\) at \(\alpha=0.10\) for \(p=10\) (and \(0.34\) for \(p=50,\delta=4\)), and is essentially uninformative or misleading for \(\alpha\ge 0.20\) (average \((0.31,0.04)\)). 
+REPPlab and ICS are conservative in this asymmetric setting (averages \((0.06,0.01)\) and \((0.07,0.03)\)); the only relevant REPPlab gains occur at the corner \(p=10,\alpha=0.05\) (c \(=0.77\)–\(0.80\)). Under fully dependent contamination with a single outlier group, DOBIN, in particular the DSO-DSM variant shows a remarkable capability for outlier detection. HDOD is a solid baseline except at \(p=10,\alpha=0.40\). PP-MCD, REPPlab and ICS are not competitive once \(\alpha\) exceeds \(0.10\).
+
+\begin{table}[H]
+\centering
+\begingroup
+\setlength{\tabcolsep}{5pt} 
+\renewcommand{\arraystretch}{1.15} 
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|*{17}{c|}|}
+\hline
+\multirow{2}{*}{$p$} & \multirow{2}{*}{$\alpha$} & \multirow{2}{*}{$\delta$} &
+\multicolumn{2}{c|}{REPPlab} & \multicolumn{2}{c|}{HDO} &
+\multicolumn{2}{c|}{PP\text{-}MCD} & \multicolumn{2}{c|}{ICS} &
+\multicolumn{2}{c|}{DSO} & \multicolumn{2}{c|}{DSO\text{-}SDC} &
+\multicolumn{2}{c|}{DSO\text{-}SDM} \\ \cline{4-17}
+& & & c & f & c & f & c & f & c & f & c & f & c & f & c & f \\ \hline
+10 & 0.05 & 3 & 0.77 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.05 & 4 & 0.80 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.10 & 3 & 0.08 & 0.01 & 1.00 & 0.00 & 0.50 & 0.00 & 0.05 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.10 & 4 & 0.07 & 0.00 & 1.00 & 0.00 & 0.50 & 0.00 & 0.06 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.20 & 3 & 0.00 & 0.01 & 0.98 & 0.00 & 0.25 & 0.00 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.20 & 4 & 0.00 & 0.02 & 1.00 & 0.00 & 0.25 & 0.00 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.30 & 3 & 0.00 & 0.02 & 0.85 & 0.00 & 0.11 & 0.02 & 0.00 & 0.03 & 1.00 & 0.01 & 1.00 & 0.01 & 1.00 & 0.01 \\ \hline
+10 & 0.30 & 4 & 0.00 & 0.02 & 0.98 & 0.00 & 0.17 & 0.00 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.40 & 3 & 0.00 & 0.02 & 0.24 & 0.00 & 0.00 & 0.08 & 0.00 & 0.03 & 0.86 & 0.13 & 0.86 & 0.13 & 0.94 & 0.07 \\ \hline
+10 & 0.40 & 4 & 0.00 & 0.02 & 0.67 & 0.00 & 0.00 & 0.08 & 0.00 & 0.03 & 0.92 & 0.07 & 0.92 & 0.07 & 0.98 & 0.02 \\ \hline
+30 & 0.05 & 3 & 0.01 & 0.01 & 1.00 & 0.03 & 1.00 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.05 & 4 & 0.00 & 0.01 & 1.00 & 0.03 & 1.00 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 3 & 0.00 & 0.01 & 1.00 & 0.02 & 0.50 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 4 & 0.00 & 0.01 & 1.00 & 0.01 & 0.50 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 3 & 0.00 & 0.01 & 1.00 & 0.01 & 0.00 & 0.06 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 4 & 0.00 & 0.01 & 1.00 & 0.01 & 0.00 & 0.06 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 3 & 0.00 & 0.01 & 1.00 & 0.01 & 0.00 & 0.07 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 4 & 0.00 & 0.01 & 1.00 & 0.01 & 0.00 & 0.07 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.40 & 3 & 0.00 & 0.01 & 0.86 & 0.01 & 0.00 & 0.08 & 0.00 & 0.04 & 0.98 & 0.05 & 0.96 & 0.06 & 1.00 & 0.02 \\ \hline
+30 & 0.40 & 4 & 0.00 & 0.01 & 0.99 & 0.01 & 0.00 & 0.08 & 0.00 & 0.04 & 1.00 & 0.01 & 1.00 & 0.01 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 3 & 0.00 & 0.01 & 1.00 & 0.05 & 1.00 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 4 & 0.00 & 0.01 & 1.00 & 0.04 & 1.00 & 0.00 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 3 & 0.00 & 0.01 & 1.00 & 0.03 & 0.05 & 0.05 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 4 & 0.00 & 0.01 & 1.00 & 0.03 & 0.34 & 0.02 & 0.00 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 3 & 0.00 & 0.01 & 1.00 & 0.02 & 0.00 & 0.06 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 4 & 0.00 & 0.01 & 1.00 & 0.02 & 0.00 & 0.06 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.30 & 3 & 0.00 & 0.01 & 1.00 & 0.03 & 0.00 & 0.07 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.30 & 4 & 0.00 & 0.01 & 1.00 & 0.02 & 0.00 & 0.07 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.40 & 3 & 0.00 & 0.01 & 0.96 & 0.04 & 0.00 & 0.08 & 0.00 & 0.04 & 1.00 & 0.03 & 1.00 & 0.03 & 1.00 & 0.02 \\ \hline
+50 & 0.40 & 4 & 0.00 & 0.01 & 1.00 & 0.03 & 0.00 & 0.08 & 0.00 & 0.04 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+\multicolumn{3}{|c|}{Average} & 0.06 & 0.01 & 0.95 & 0.02 & 0.31 & 0.04 & 0.07 & 0.03 & 0.99 & 0.01 & 0.99 & 0.01 & 1.00 & 0.01 \\ \hline
+\end{tabular}}
+\endgroup
+\caption{Summary of outlier detection methods for \textbf{Asymmetric Contamination with one outlier group}.}
+\label{tab:asym_one_group}
+\end{table}
+
+
+\subsubsection*{FDCM Symmetric Contamination with Two Outlier Groups}
+
+
+%The experiments conducted, similar to the ones proposed by \citep{PeñaPrieto2007}, evaluate the efficacy of the suggested approach for outlier detection by employing two metrics in each simulation scenario: the mean true positive rate (\({c}\)) and the mean false positive rate (\({f}\)). Additionally, the global mean values for these rates, denoted as \(\bar{c}\) and \(\bar{f}\) across all cases, are also computed.
+
+Table~\ref{tab:sym_two_group_new} shows satisfactory results from the DOBIN-based methods. All variants bring remarkable results across the full grid: averages are \((\text{c},\text{f})=(1.00,0.00)\) for the three variants, with the only minor deviation being \(\text{c}=0.98\) at \(p=10,\alpha=0.30,\delta=3\) for DSO (still with \(\text{f}=0.00\)). In short, under the FDCM (symmetric) setting, DOBIN-based methods are constant in \(p \in \{10,30,50\}\), \(\alpha \in [0.05,0.40]\), and \(\delta \in \{3,4\}\), and DSO-SDM attains \((1.00,0.00)\) uniformly. 
+HDOD is a strong method, its average is \((1.00,0.01)\) with \(\text{c}=1.00\) in every configuration and small \(\text{f}\) (peaking at \(0.05\) for \(p=50,\alpha=0.05\)). 
+Among the other methods used for comparison, PP-MCD and ICS improve markedly with respect to the one-group case, reaching averages \((0.38,0.01)\) and \((0.39,0.01)\), respectively. 
+Their gains are concentrated in low contamination and lower dimension (e.g., ICS \(=0.90{-}0.96\) at \(p=10,\alpha\leq0.10\)), but sensitivity collapses as \(\alpha\) grows and \(p\) increases (near \(0.00{-}0.03\) for \(\alpha\geq0.30\) and \(p\geq30\)). REPPlab remains conservative (average \((0.13,0.00)\)), with nontrivial performance only at specified and 'easy' scenarios \(p=10,\alpha=0.05\) (c \(=0.70{-}0.80\)). With two outlier groups under FDCM, DOBIN-based methods (notably DSO-SDM) achieves almost perfect detection with insignificant false alarms throughout, while HDOD attains \(\text{c}=1.00\) and very low \(\text{f}\). PP-MCD and ICS benefit from the symmetry but remain as the least reliable methods \(\alpha\) and \(p\) increase, and REPPlab is generally out of competition in this scenario.
+
+
+
+\begin{table}[H]
+\centering
+\begingroup
+\setlength{\tabcolsep}{5pt}    % margen horizontal uniforme (también en el borde exterior)
+\renewcommand{\arraystretch}{1.15} % margen vertical uniforme
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|*{17}{c|}|}
+\hline
+\multirow{2}{*}{$p$} & \multirow{2}{*}{$\alpha$} & \multirow{2}{*}{$\delta$} &
+\multicolumn{2}{c|}{REPPlab} & \multicolumn{2}{c|}{HDO} &
+\multicolumn{2}{c|}{PP\text{-}MCD} & \multicolumn{2}{c|}{ICS} &
+\multicolumn{2}{c|}{DSO} & \multicolumn{2}{c|}{DSO\text{-}SDC} &
+\multicolumn{2}{c|}{DSO\text{-}SDM} \\ \cline{4-17}
+ & & & c & f & c & f & c & f & c & f & c & f & c & f & c & f \\ \hline
+10 & 0.05 & 3 & 0.80 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 0.96 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 \\ \hline
+10 & 0.05 & 4 & 0.70 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 0.94 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.10 & 3 & 0.43 & 0.00 & 1.00 & 0.00 & 0.50 & 0.00 & 0.90 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.10 & 4 & 0.46 & 0.00 & 1.00 & 0.00 & 0.50 & 0.00 & 0.96 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.20 & 3 & 0.11 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.25 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.20 & 4 & 0.12 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.25 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 0.99 & 0.00 \\ \hline
+10 & 0.30 & 3 & 0.02 & 0.00 & 1.00 & 0.00 & 0.17 & 0.00 & 0.07 & 0.01 & 0.98 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.30 & 4 & 0.02 & 0.00 & 1.00 & 0.00 & 0.17 & 0.00 & 0.06 & 0.01 & 1.00 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.40 & 3 & 0.02 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.02 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.40 & 4 & 0.02 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.03 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.05 & 3 & 0.27 & 0.00 & 1.00 & 0.01 & 0.94 & 0.00 & 0.98 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.05 & 4 & 0.27 & 0.00 & 1.00 & 0.01 & 0.94 & 0.00 & 0.98 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 3 & 0.11 & 0.00 & 1.00 & 0.01 & 0.50 & 0.00 & 0.77 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 4 & 0.11 & 0.00 & 1.00 & 0.01 & 0.50 & 0.00 & 0.82 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 3 & 0.02 & 0.01 & 1.00 & 0.00 & 0.25 & 0.00 & 0.14 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 4 & 0.02 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.14 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 3 & 0.01 & 0.01 & 1.00 & 0.00 & 0.17 & 0.00 & 0.03 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 4 & 0.01 & 0.01 & 1.00 & 0.00 & 0.17 & 0.00 & 0.03 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.40 & 3 & 0.00 & 0.01 & 1.00 & 0.00 & 0.06 & 0.04 & 0.01 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.40 & 4 & 0.00 & 0.01 & 1.00 & 0.00 & 0.07 & 0.03 & 0.00 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 3 & 0.11 & 0.00 & 1.00 & 0.05 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 4 & 0.12 & 0.00 & 1.00 & 0.05 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 3 & 0.03 & 0.00 & 1.00 & 0.02 & 0.50 & 0.00 & 0.58 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 4 & 0.03 & 0.00 & 1.00 & 0.02 & 0.50 & 0.00 & 0.60 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 3 & 0.01 & 0.01 & 1.00 & 0.01 & 0.25 & 0.00 & 0.09 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 4 & 0.01 & 0.01 & 1.00 & 0.01 & 0.25 & 0.00 & 0.09 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.30 & 3 & 0.00 & 0.01 & 1.00 & 0.00 & 0.05 & 0.05 & 0.01 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.30 & 4 & 0.00 & 0.01 & 1.00 & 0.00 & 0.05 & 0.05 & 0.01 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.40 & 3 & 0.00 & 0.01 & 1.00 & 0.00 & 0.00 & 0.08 & 0.00 & 0.04 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.40 & 4 & 0.00 & 0.01 & 1.00 & 0.00 & 0.00 & 0.08 & 0.00 & 0.04 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+\multicolumn{3}{|c|}{Average} & 0.13 & 0.00 & 1.00 & 0.01 & 0.38 & 0.01 & 0.39 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+\end{tabular}}
+\endgroup
+\caption{Summary of outlier detection methods for \textbf{Symmetric Contamination with two outlier groups}.}
+\label{tab:sym_two_group_new}
+\end{table}
+
+
+\subsubsection*{FDCM Symmetric Contamination with four outlier groups}
+
+
+Table~\ref{tab:fdcm_four_groups} indicates that the DOBIN-based methods remains as a top performer in the most symmetric or multimodal setting. DSO, DSO-SDC and DSO-SDM achieve, again, remarkable outcomes throughout the grid: averages are \((1.00,0.00)\) for the three variants. 
+Across all \((p,\alpha,\delta)\), DSO-SDM attains \((1.00,0.00)\) uniformly; DSO and DSO-SDC are also perfect in practice, with only marginal dips for DSO (e.g., \(p=10,\alpha\in\{0.10,0.20\}\): \(0.99{-}0.98\) with \(\text{f}=0.00\)). 
+This confirms a strong insensitivity to dimension \((p\in\{10,30,50\})\), contamination (\(\alpha\in[0.05,0.40]\)) and displacement (\(\delta\in\{3,4\}\)) when contamination is symmetric and dispersed. HDOD also attains outstanding results (average \((1.00,0.01)\)): \(\text{c}=1.00\) in every configuration with small \(\text{f}\), peaking at \(0.05\) for \(p=50,\alpha\in\{0.05,0.10\}\) and otherwise \(\le 0.01\). The comparison methods benefit substantially from the symmetry relative to the one-group case: PP-MCD and ICS improve to averages \((0.41,0.00)\) and \((0.47,0.01)\), respectively.Their gains are concentrated at low \(\alpha\) and moderate \(p\) (e.g., ICS \(=0.96{-}1.00\) for \(p\in\{30,50\},\alpha\le 0.10\)), but its capacity to detect $c$ erodes as \(\alpha\) grows and at the highest dimensions (e.g., ICS \(\approx 0.00{-}0.03\) for \(\alpha\ge 0.30\)). REPPlab remains conservative overall (average \((0.15,0.00)\)), with moderate detection only at the corner \(p=10,\alpha=0.05\) (c \(=0.60{-}0.61\)).
+
+Under FDCM with four outlier groups, DOBIN-based methods, particularly DSO-SDM is uniformly superior with insignificant false alarms. HDOD is a reliable alternative with slightly higher \(\text{f}\) in a few high-\(p\), low-\(\alpha\) settings. PP-MCD and ICS profit from the symmetric dispersion but do not sustain high sensitivity once \(\alpha\) increases; REPPlab remains not competent.
+
+
+\begin{table}[H]
+\centering
+\begingroup
+\setlength{\tabcolsep}{5pt}    % margen horizontal uniforme
+\renewcommand{\arraystretch}{1.15} % margen vertical uniforme
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|*{17}{c|}|}
+\hline
+\multirow{2}{*}{$p$} & \multirow{2}{*}{$\alpha$} & \multirow{2}{*}{$\delta$} &
+\multicolumn{2}{c|}{REPPlab} & \multicolumn{2}{c|}{HDO} &
+\multicolumn{2}{c|}{PP\text{-}MCD} & \multicolumn{2}{c|}{ICS} &
+\multicolumn{2}{c|}{DSO} & \multicolumn{2}{c|}{DSO\text{-}SDC} &
+\multicolumn{2}{c|}{DSO\text{-}SDM} \\ \cline{4-17}
+ & & & c & f & c & f & c & f & c & f & c & f & c & f & c & f \\ \hline
+10 & 0.05 & 3 & 0.60 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 0.82 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.05 & 4 & 0.61 & 0.00 & 1.00 & 0.00 & 1.00 & 0.01 & 0.83 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.10 & 3 & 0.38 & 0.00 & 1.00 & 0.00 & 0.63 & 0.00 & 0.78 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 & 0.98 & 0.00 \\ \hline
+10 & 0.10 & 4 & 0.39 & 0.00 & 1.00 & 0.00 & 0.63 & 0.00 & 0.87 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 0.98 & 0.00 \\ \hline
+10 & 0.20 & 3 & 0.21 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.63 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 0.99 & 0.00 \\ \hline
+10 & 0.20 & 4 & 0.20 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.70 & 0.00 & 0.98 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 \\ \hline
+10 & 0.30 & 3 & 0.06 & 0.00 & 1.00 & 0.00 & 0.16 & 0.00 & 0.14 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.30 & 4 & 0.06 & 0.00 & 1.00 & 0.00 & 0.16 & 0.00 & 0.13 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.40 & 3 & 0.04 & 0.00 & 1.00 & 0.00 & 0.13 & 0.00 & 0.05 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+10 & 0.40 & 4 & 0.05 & 0.00 & 1.00 & 0.00 & 0.13 & 0.00 & 0.05 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.05 & 3 & 0.33 & 0.00 & 1.00 & 0.01 & 0.94 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.05 & 4 & 0.32 & 0.00 & 1.00 & 0.01 & 0.94 & 0.00 & 0.97 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 3 & 0.17 & 0.00 & 1.00 & 0.01 & 0.47 & 0.00 & 0.91 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.10 & 4 & 0.16 & 0.00 & 1.00 & 0.01 & 0.47 & 0.00 & 0.92 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 3 & 0.05 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.34 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.20 & 4 & 0.05 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.36 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 3 & 0.02 & 0.00 & 1.00 & 0.00 & 0.17 & 0.00 & 0.07 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.30 & 4 & 0.02 & 0.00 & 1.00 & 0.00 & 0.17 & 0.00 & 0.07 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.40 & 3 & 0.01 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.02 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+30 & 0.40 & 4 & 0.01 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.01 & 0.03 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 3 & 0.22 & 0.00 & 1.00 & 0.05 & 1.00 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.05 & 4 & 0.22 & 0.00 & 1.00 & 0.05 & 1.00 & 0.00 & 0.96 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 3 & 0.09 & 0.00 & 1.00 & 0.03 & 0.52 & 0.00 & 0.98 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.10 & 4 & 0.10 & 0.00 & 1.00 & 0.03 & 0.52 & 0.00 & 0.96 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 3 & 0.02 & 0.00 & 1.00 & 0.01 & 0.25 & 0.00 & 0.22 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.20 & 4 & 0.02 & 0.00 & 1.00 & 0.00 & 0.25 & 0.00 & 0.22 & 0.00 & 0.99 & 0.00 & 0.99 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.30 & 3 & 0.01 & 0.01 & 1.00 & 0.00 & 0.16 & 0.00 & 0.03 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 0.99 & 0.00 \\ \hline
+50 & 0.30 & 4 & 0.01 & 0.01 & 1.00 & 0.00 & 0.16 & 0.00 & 0.03 & 0.02 & 1.00 & 0.00 & 1.00 & 0.00 & 0.99 & 0.00 \\ \hline
+50 & 0.40 & 3 & 0.00 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.00 & 0.04 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+50 & 0.40 & 4 & 0.00 & 0.01 & 1.00 & 0.00 & 0.13 & 0.00 & 0.00 & 0.04 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+\multicolumn{3}{|c|}{Average} & 0.15 & 0.00 & 1.00 & 0.01 & 0.41 & 0.00 & 0.47 & 0.01 & 1.00 & 0.00 & 1.00 & 0.00 & 1.00 & 0.00 \\ \hline
+\end{tabular}}
+\endgroup
+\caption{Summary of outlier detection methods for \textbf{Symmetric Contamination with four outlier groups}.}
+\label{tab:fdcm_four_groups}
+\end{table}
+
+\subsubsection*{Simulation with FICM }
+
+Table~\ref{tab:ficm_one_group} reveals a marked contrast with the FDCM setting: methods tailored to casewise contamination largely collapse under cellwise noise. 
+REPPlab, HDO, PP-MCD and ICS yield negligible sensitivity on average (c \(\approx 0.01,0.01,0.06,0.03\) with f \(\approx 0.00\)), with only occasional small gains for very benign corners (e.g., PP-MCD \(=0.12{-}0.13\) at \(p=10,\alpha=0.05\)). The only procedures with nontrivial power are the DOBIN variants. 
+At \(p=10\) and low contamination (\(\alpha\le 0.10\)) they reach c \(=0.53{-}0.56\) with moderate f (around \(0.04{-}0.16\)). As \(\alpha\) grows, c decreases toward \(0.40{-}0.46\) and f inflates in some cells (e.g., \(p=10,\alpha=0.20{-}0.30\) shows f up to \(0.56\)). 
+Across the grid, DSO-SDM attains the best average trade-off (c \(\approx 0.44\) with a lower f \(\approx 0.31\)) compared to DSO/DSO-SDC (both \(\approx 0.43/0.41\)). The displacement \(\delta\) plays a secondary role relative to \(\alpha\) and \(p\): increasing \(\delta\) occasionally reduces f (e.g., \(p=10,\alpha=0.40\): \(0.32\to0.24\) for DSO), but overall trends are driven by contamination rate and dimension. Several entries show missing f values (“-”) at \(p\ge 30\) and moderate/high \(\alpha\). This is expected under FICM: the probability that a row is fully clean is \((1-\alpha)^p\), which becomes vanishingly small (so the “negative” class is absent or nearly absent), rendering f undefined at the row level.  This phenomenon also explains the inherent difficulty of case identification in FICM: rows intermix clean and contaminated cells, weakening casewise detectors.\\
+
+Under cellwise contamination with one shifted component, DOBIN (particularly DSO-SDM) is the only variants reaching meaningful sensitivity, at the price of higher f as \(\alpha\) and \(p\) increase. Classical casewise robust methods (HDO, PP-MCD, ICS) and REPPlab are ineffective in this regime, and f may be uninformative when clean rows effectively vanish.
+
+
+\begin{table}[H]
+\centering
+\begingroup
+\setlength{\tabcolsep}{5pt}    % margen horizontal uniforme
+\renewcommand{\arraystretch}{1.15} % margen vertical uniforme
+\resizebox{\textwidth}{!}{
+\begin{tabular}{|*{17}{c|}|}
+\hline
+\multirow{2}{*}{$p$} & \multirow{2}{*}{$\alpha$} & \multirow{2}{*}{$\delta$} &
+\multicolumn{2}{c|}{REPPlab} & \multicolumn{2}{c|}{HDO} &
+\multicolumn{2}{c|}{PP\text{-}MCD} & \multicolumn{2}{c|}{ICS} &
+\multicolumn{2}{c|}{DSO} & \multicolumn{2}{c|}{DSO\text{-}SDC} &
+\multicolumn{2}{c|}{DSO\text{-}SDM} \\ \cline{4-17}
+ & & & c & f & c & f & c & f & c & f & c & f & c & f & c & f \\ \hline
+10 & 0.05 & 3 & 0.03 & 0.00 & 0.02 & 0.00 & 0.12 & 0.00 & 0.05 & 0.00 & 0.56 & 0.16 & 0.56 & 0.16 & 0.49 & 0.16 \\ \hline
+10 & 0.05 & 4 & 0.04 & 0.00 & 0.04 & 0.00 & 0.13 & 0.00 & 0.09 & 0.00 & 0.55 & 0.06 & 0.55 & 0.05 & 0.50 & 0.06 \\ \hline
+10 & 0.10 & 3 & 0.02 & 0.00 & 0.00 & 0.00 & 0.08 & 0.00 & 0.04 & 0.00 & 0.53 & 0.12 & 0.53 & 0.12 & 0.49 & 0.12 \\ \hline
+10 & 0.10 & 4 & 0.03 & 0.00 & 0.01 & 0.00 & 0.08 & 0.00 & 0.05 & 0.00 & 0.55 & 0.04 & 0.55 & 0.04 & 0.51 & 0.06 \\ \hline
+10 & 0.20 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.06 & 0.00 & 0.02 & 0.00 & 0.45 & 0.27 & 0.45 & 0.28 & 0.43 & 0.21 \\ \hline
+10 & 0.20 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.06 & 0.00 & 0.02 & 0.00 & 0.44 & 0.45 & 0.43 & 0.48 & 0.44 & 0.36 \\ \hline
+10 & 0.30 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.01 & 0.00 & 0.42 & 0.45 & 0.42 & 0.41 & 0.41 & 0.38 \\ \hline
+10 & 0.30 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.41 & 0.56 & 0.40 & 0.53 & 0.41 & 0.49 \\ \hline
+10 & 0.40 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.01 & 0.00 & 0.40 & 0.32 & 0.40 & 0.28 & 0.39 & 0.29 \\ \hline
+10 & 0.40 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.01 & 0.00 & 0.40 & 0.24 & 0.40 & 0.28 & 0.41 & 0.36 \\ \hline
+30 & 0.05 & 3 & 0.01 & 0.00 & 0.05 & 0.01 & 0.06 & 0.00 & 0.03 & 0.00 & 0.49 & 0.11 & 0.49 & 0.11 & 0.44 & 0.12 \\ \hline
+30 & 0.05 & 4 & 0.01 & 0.00 & 0.07 & 0.00 & 0.06 & 0.00 & 0.03 & 0.00 & 0.53 & 0.19 & 0.53 & 0.19 & 0.49 & 0.07 \\ \hline
+30 & 0.10 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.46 & 0.44 & 0.46 & 0.44 & 0.46 & 0.24 \\ \hline
+30 & 0.10 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.35 & 0.99 & 0.35 & 0.99 & 0.37 & 0.72 \\ \hline
+30 & 0.20 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.46 & 0.27 & 0.46 & 0.27 & 0.45 & 0.33 \\ \hline
+30 & 0.20 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.43 & 0.87 & 0.42 & 0.87 & 0.41 & 0.60 \\ \hline
+30 & 0.30 & 3 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.43 & - & 0.43 & - & 0.42 & - \\ \hline
+30 & 0.30 & 4 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.45 & - & 0.45 & - & 0.44 & - \\ \hline
+30 & 0.40 & 3 & 0.01 & - & 0.00 & - & 0.05 & - & 0.01 & - & 0.33 & - & 0.34 & - & 0.43 & - \\ \hline
+30 & 0.40 & 4 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.35 & - & 0.35 & - & 0.43 & - \\ \hline
+50 & 0.05 & 3 & 0.01 & 0.00 & 0.06 & 0.01 & 0.05 & 0.00 & 0.03 & 0.00 & 0.48 & 0.13 & 0.48 & 0.12 & 0.43 & 0.10 \\ \hline
+50 & 0.05 & 4 & 0.01 & 0.00 & 0.07 & 0.00 & 0.05 & 0.00 & 0.03 & 0.00 & 0.38 & 0.98 & 0.38 & 0.98 & 0.42 & 0.48 \\ \hline
+50 & 0.10 & 3 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.47 & 0.53 & 0.47 & 0.57 & 0.45 & 0.29 \\ \hline
+50 & 0.10 & 4 & 0.01 & 0.00 & 0.00 & 0.00 & 0.05 & 0.00 & 0.02 & 0.00 & 0.33 & 1.00 & 0.33 & 1.00 & 0.36 & 0.75 \\ \hline
+50 & 0.20 & 3 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.45 & - & 0.45 & - & 0.45 & - \\ \hline
+50 & 0.20 & 4 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.46 & - & 0.46 & - & 0.45 & - \\ \hline
+50 & 0.30 & 3 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.40 & - & 0.40 & - & 0.43 & - \\ \hline
+50 & 0.30 & 4 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.43 & - & 0.43 & - & 0.44 & - \\ \hline
+50 & 0.40 & 3 & 0.01 & - & 0.00 & - & 0.05 & - & 0.02 & - & 0.29 & - & 0.30 & - & 0.41 & - \\ \hline
+50 & 0.40 & 4 & 0.00 & - & 0.00 & - & 0.05 & - & 0.01 & - & 0.34 & - & 0.34 & - & 0.42 & - \\ \hline
+\multicolumn{3}{|c|}{Average} & 0.01 & 0.00 & 0.01 & 0.00 & 0.06 & 0.00 & 0.03 & 0.00 & 0.43 & 0.41 & 0.43 & 0.41 & 0.44 & 0.31 \\ \hline
+\end{tabular}}
+\endgroup
+\centering
+\caption{Summary of outlier detection methods for \textbf{FICM.}}
+\label{tab:ficm_one_group}
+\end{table}
+
+\section{Real Data Applications}\label{sec:applic}
+
+The suggested method has been implemented on three data sets with different sample-space dimensions in order to evaluate its effectiveness in identifying outliers. In all data sets, it is known which observations correspond to outliers. The outlier class is identified with the number 2, and the non-outlier class with the number 1. The balanced accuracy metric (BA) is used to evaluate the performance of each methodology. As we showed in Section \ref{sec:simare}, our proposal DOBIN S-Orthogonal, with and without cellwise weights, is compared with Exploratory Projection Pursuit, High Dimensional Outlier Dimension, Maximum Covariance Distance and ICS.\\
+
+The first application is on the Wine data set \citep{misc_wine_109}. This is a renowned multivariate data set used in many machine-learning contexts, especially for classification and regression tasks. It originates from a chemical analysis of wines grown in the same region in Italy but derived from three different cultivars, resulting in a data set that contains thirteen different attributes for each wine \citep{sathe2016lodes}. These attributes include various chemical properties. The data set contains 129 observations with 13 attributes each. The goal typically associated with this data set is to perform a classification task to determine the origin of wines based on the chemical analysis. The true outlier rate in this set is $34.99\%$. Here, the DOBIN S-ORTHOGONAL variants achieve the highest BA, compared with the other methods, reaching approximately $91\%$. This is the result of a method that is capable in this case of a perfect identification of True Positives, note that there aren't any False Positives, besides that, the method is identifying at a good rate the True Negatives. Comparing this proposal with the other methods included in the study, it is observed that PP-MCD and HDOD obtain a good performance but, compared with the DSO-based methods, they detected some False Positives. So, in this case, the DSO methods, with its strategy of detection of univariate outlyingness across informative directions is effective.
+\\  
+
+The second application is on the Satimage-2 data set, integral to the Statlog collection, it serves as a critical benchmark for assessing outlier detection methodologies \citep{Rayana:2016}. Derived from satellite imagery, it encompasses multi-spectral pixel values from 3x3 neighborhoods, each representing various surface types. The data consists of six spectral bands from Landsat Multi-Spectral Scanner and contains 5803 instances with 36 features each, describing the spectral characteristics of different land-cover types. In the context of outlier detection, Satimage-2 is particularly challenging due to the subtle variations between different natural surfaces, making the identification of atypical data points a nuanced task. The data set is composed of $n = 5803$ observations in dimension $p = 36$, with 71 outlier observations. These outliers correspond to pixels associated with cotton crops, while the other observations correspond to different soil types not related to crops. The true outliers rate in this set is $1.22\%$. In this case, the DOBIN S-ORTHOGONAL variants maintain a high BA, close to the $93\%$ in the basic case and averaging $87\%$ across all the methods. Again, it can be observed that the DSO-based methods are impeccable in terms of avoid False Positives, but it is appropriate to recognize that in this extremely outbalanced scenario, these methods are prone to identifying a considerable proportion of False Negatives. This last statement is supported in tha fact that other methods, as PP-MCD and HDOD obtain better results and are capable of better labeling.\\
+
+Finally, the last application is on the Wisconsin Breast Cancer Database (WBCD) \citep{wbcd_data} is an extensively utilized data set for the development and validation of machine learning algorithms, especially in the domain of medical diagnostics. Examples can be viewed at \citep{ting2009mass} and \cite{keller2012hics}. It consists of 683 instances, each with 10 attributes plus the class attribute. These attributes are computed from a digitized image of a fine needle aspirate (FNA) of a breast mass, describing characteristics of the cell nuclei present in the image. Each feature is scored on an integer scale from 1 to 10, with the values reflecting the relative severity of the characteristic or likelihood of malignancy. Out of the 683 instances, nearly 240 were originally labeled as malignant and the rest as benign. However, the presence of outliers is not explicitly defined, as the term outlier can be subjective and dependent on the specific outlier detection method applied. In this data set, outliers could be considered as those instances that deviate significantly from the patterns described by the majority of the data points, potentially indicating rare events or errors in data collection. The true outliers rate in this set is $7.75\%$. For this application, the DOBIN S-ORTHOGONAL methods are capable of identifying inliners but contrarian to the other scenarios, in this case the capability to find the True Positives declines, however, it can be stablished that DSO-based methods are designed, as HDOD which is the best method for this case, to balance casewise robustness with the structure.\\
+
+% Requires: \usepackage{booktabs,multirow}
+\begin{table}[!htbp]
+\centering
+\label{tab:confusion_balacc_realdata}
+\small
+\begin{tabular}{llcccc}
+\toprule
+Dataset & Method & Predicted & Reference + & Reference - & Balanced Accuracy \\
+\midrule
+\multirow{14}{*}{Wine}
+ & REPPLAB  & Positive & 0  & 3   & 49\% \\
+ &          & Negative & 10 & 116 &      \\
+ & HDOD     & Positive & 5  & 2   & 74\% \\
+ &          & Negative & 5  & 117 &      \\
+ & PP-MCD   & Positive & 5  & 2   & 74\% \\
+ &          & Negative & 5  & 117 &      \\
+ & ICS      & Positive & 1  & 0   & 55\% \\
+ &          & Negative & 9  & 119 &      \\
+ & DSO      & Positive & 10 & 21  & 91\% \\
+ &          & Negative & 0  & 98  &      \\
+ & DSO-SDC  & Positive & 10 & 21  & 91\% \\
+ &          & Negative & 0  & 98  &      \\
+ & DSO-SDM  & Positive & 10 & 22  & 91\% \\
+ &          & Negative & 0  & 97  &      \\
+\midrule
+\multirow{14}{*}{Satimage-2}
+ & REPPLAB  & Positive & 18 & 50   & 62\% \\
+ &          & Negative & 53 & 5682 &      \\
+ & HDOD     & Positive & 71 & 333  & 97\% \\
+ &          & Negative & 0  & 5399 &      \\
+ & PP-MCD   & Positive & 71 & 220  & 98\% \\
+ &          & Negative & 0  & 5512 &      \\
+ & ICS      & Positive & 0  & 1    & 50\% \\
+ &          & Negative & 71 & 5731 &      \\
+ & DSO      & Positive & 71 & 783  & 93\% \\
+ &          & Negative & 0  & 4949 &      \\
+ & DSO-SDC  & Positive & 71 & 1588 & 86\% \\
+ &          & Negative & 0  & 4144 &      \\
+ & DSO-SDM  & Positive & 71 & 2010 & 82\% \\
+ &          & Negative & 0  & 3722 &      \\
+\midrule
+\multirow{12}{*}{Breastw}
+ & REPPLAB  & Positive & 29 & 2   & 56\% \\
+ &          & Negative & 210 & 442 &      \\
+ & HDOD     & Positive & 227 & 24  & 95\% \\
+ &          & Negative & 12  & 420 &      \\
+ & PP-MCD   & Positive & NA  & NA  & NA  \\
+ &          & Negative & NA  & NA  &      \\
+ & ICS      & Positive & 0   & 1   & 50\% \\
+ &          & Negative & 239 & 443 &      \\
+ & DSO      & Positive & 171 & 3   & 85\% \\
+ &          & Negative & 68  & 441 &      \\
+ & DSO-SDC  & Positive & 105 & 2   & 72\% \\
+ &          & Negative & 134 & 442 &      \\
+ & DSO-SDM  & Positive & 172 & 3   & 86\% \\
+ &          & Negative & 67  & 441 &      \\
+\bottomrule
+\end{tabular}
+\caption{Confusion matrices and balanced accuracy for real-data applications.}
+\end{table}
+
+
+\section{Conclusions} \label{sec:con}
+
+In the fully dependent contamination model, DOBIN-based approaches (DSO, DSO-SDC, and DSO-SDM) consistently achieved satisfactory detection rates with minimal false positives across one, two, and four outlier-cluster scenarios. Their robustness was preserved under varying contamination levels ($\alpha$), dimensionalities ($p$), and outlier distances ($\delta$). In contrast used for comparison performed competitively in low to moderate contamination or even systematically underperformed, either missing a large proportion of outliers or generating excessive false alarms. These results confirm DOBIN’s theoretical suitability for dependent contamination structures where casewise anomalies dominate. \\
+
+
+In the fully independent contamination model, all methods exhibited a marked degradation in performance, reflecting the intrinsic difficulty of detecting cellwise contamination. Here, DOBIN variants showed similar behavior regardless of the number of outlier groups, highlighting that a single representative simulation suffices due to the exchangeability of contamination patterns across dimensions. Nonetheless, while DOBIN maintained moderate discrimination power, sensitivity was notably reduced, confirming that casewise-oriented frameworks are less effective when contamination propagates independently across cells. \\
+ 
+When applied to real datasets, DSO-based methods are effective with dataset with low to moderate prevalence and they remain competitive in cases of strong imbalance. Nevertheless, other procedures can outperform the proposed methods when the prevalence is extremely low as in Satimage-2 or relatively high as it is in the Breastw dataset. However it can be stablished that the proposed methods, overall can be competent and reliable in both scenarios, not only one of them.\\
+
+Overall, this study demonstrates the effectiveness of DSO-based approaches as robust tools for multivariate outlier detection. Across extensive simulations and real-data applications, these methods consistently delivered high accuracy and balanced error rates under structured contamination settings, confirming their competitiveness in practice. A key contribution of this work is the comprehensive evaluation framework, which not only validates the strengths of projection-based techniques but also provides clear guidance on their performance across different contamination scenarios. By systematically analyzing both casewise and cellwise contamination models, as well as high-dimensional real datasets, this research offers a rigorous benchmark that enhances the understanding of method behavior in diverse contexts. 
+In addition, the comparison with alternative approaches highlights the complementarity of available tools, underscoring that projection-based methods are a reliable cornerstone for robust analysis, while other techniques may be preferable in specific challenging environments. Taken together, these findings strengthen the practical relevance of robust multivariate outlier detection and open pathways for future developments in hybrid and adaptive frameworks.
+
+
+%REFERENCES
+
+\bibliographystyle{jasa3}
+\bibliography{trabajo.bib}
+\end{document}
+
+
+
+
