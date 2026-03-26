@@ -106,7 +106,7 @@ Key lookup pattern: `sim_data[["FDCM_mode1_p10_alpha0.05_delta3_c0.5"]][[rep_ind
 
 ## Important Conventions
 
-- **Seeds**: `set.seed(50)` for simulation generation; `set.seed(123)` in notebooks
+- **Seeds**: `set.seed(50)` for simulation generation and in `Simulaciones_Art.R`; `set.seed(123)` in `Real_Data.R`
 - **Thresholds**: REPPlab uses 95th percentile; PP-MCD uses χ²(0.95) Mahalanobis cutoff; ICS uses `ics.outlier(level.test = 0.3)`; HDO uses simulation-based `b0` threshold (see HDO section)
 - **Error handling**: PP-MCD calls are wrapped in `tryCatch`; failed replications return `NA` metrics
 - **Output format**: `confusion_ALL.csv` and `metrics_ALL.csv` are the consolidated result files consumed for the article; intermediate per-scenario CSVs are also written during the run

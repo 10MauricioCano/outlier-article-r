@@ -414,13 +414,13 @@ For the fully dependent (rowwise) mechanism, mode \(g=1,2,3\) corresponds to \(k
 \[
 X \sim (1-\alpha)\,N_p(e_0,I)\;+\;\sum_{\ell=1}^{k}\frac{\alpha}{k}\,N_p\!\big(\mu^{(\ell)},\lambda I\big),
 \]
-with \(\mu^{(1)}=\delta e\), \(\{\mu^{(1)},\mu^{(2)}\}=\{\delta e,-\delta e\}\) for \(k=2\), and four orthants for \(k=4\). The same three modes are mirrored in FICM through the sign pattern of \(\mu^{(g)}\) in the definition of \(Z_{ij}\) above.
+with \(\mu^{(1)}=\delta e\), \(\{\mu^{(1)},\mu^{(2)}\}=\{\delta e,-\delta e\}\) for \(k=2\), and four orthants for \(k=4\). The same three modes are mirrored in FICM through the sign pattern of \(\mu^{(g)}\) in the definition of \(Z_{ij}\) above.\\
 
 
-For each combination \((\alpha,p,\delta,\lambda)\) and for each mode \(g\), we generate \(m\) independent datasets of size \(n=10p\). Methods produce predicted labels \(\hat y_i\in\{0,1\}\) at the row level, which are compared with \(y_i\) to build the confusion matrix and compute c and f. We report table summaries of the averages across \(m\) replications. In rare replications where the denominator of a rate is zero (e.g., no positives or no negatives), the corresponding rate is undefined; these values are recorded as NA and excluded from the averages, and we additionally monitor the NA proportion per scenario for transparency.
+For each combination \((\alpha,p,\delta,\lambda)\) and for each mode \(g\), we generate \(m\) independent datasets of size \(n=10p\). Methods produce predicted labels \(\hat y_i\in\{0,1\}\) at the row level, which are compared with \(y_i\) to build the confusion matrix and compute c and f. We report table summaries of the averages across \(m\) replications. In rare replications where the denominator of a rate is zero (e.g., no positives or no negatives), the corresponding rate is undefined; these values are recorded as NA and excluded from the averages, and we additionally monitor the NA proportion per scenario for transparency.\\
 
 
-All simulations use the same grids for \(\alpha,p,\delta,\lambda\) under both mechanisms (FDCM/FICM), identical sample sizes, and fixed random seeds per scenario; code is available upon request.
+All simulations use the same grids for \(\alpha,p,\delta,\lambda\) under both mechanisms (FDCM/FICM), identical sample sizes, and fixed random seeds per scenario; code is available upon request. The experiments conducted, similar to the ones proposed by \citep{PeñaPrieto2007}, evaluate the efficacy of the suggested approach for outlier detection by employing two metrics in each simulation scenario: the mean true positive rate (\({c}\)) and the mean false positive rate (\({f}\)). Additionally, the global mean values for these rates, denoted as \(\bar{c}\) and \(\bar{f}\) across all cases, are also computed.
 
 
 
@@ -608,6 +608,8 @@ Under FDCM with four outlier groups, DOBIN-based methods, particularly DSO-SDM i
 
 \subsubsection*{Simulation with FICM }
 
+Although the simulation framework described above mirrors the three contamination modes (\(g=1,2,3\)) in FICM through the sign pattern of \(\mu^{(g)}\), the present article restricts the FICM evaluation to mode \(g=1\) (\(\mu^{(1)}=\delta e\), uniform positive shift). The reason is theoretical: \citet{Alqallaf2009} define FICM with a \emph{single}, unspecified contamination distribution \(Z\) that is common to all cells—the model is \(X_{ij}=(1-B_{ij})Y_{ij}+B_{ij}Z_{ij}\) where every \(Z_{ij}\) is drawn from the same marginal of \(Z\) (cf.\ their eq.\ (2) and the derivation of the influence function in eq.\ (11), where the contamination point \(z\in\mathbb{R}^p\) is a single fixed vector). Modes \(g=2\) and \(g=3\) assign opposite signs (\(+\delta\) and \(-\delta\)) to different components of the contamination mean, which corresponds to using \emph{component-wise distinct} contamination distributions. This departs from the single-\(Z\) framework of the original model and introduces a self-cancellation effect: when cells of the same row are shifted in opposing directions their contributions to any row-level outlyingness score (e.g.\ a componentwise MAD-based aggregation) partially cancel, so contaminated rows may not appear anomalous in the row-level sense. The resulting detection problem is therefore structurally different from the canonical FICM scenario studied by \citet{Alqallaf2009}, and evaluating methods on it would conflate two distinct contamination regimes. Because the goal of this article is to benchmark row-level outlier detectors under the standard FICM as formalized in \citet{Alqallaf2009}, we report results only for mode \(g=1\).\\
+
 Table~\ref{tab:ficm_one_group} reveals a marked contrast with the FDCM setting: methods tailored to casewise contamination largely collapse under cellwise noise. 
 REPPlab, HDO, PP-MCD and ICS yield negligible sensitivity on average (c \(\approx 0.01,0.01,0.06,0.03\) with f \(\approx 0.00\)), with only occasional small gains for very benign corners (e.g., PP-MCD \(=0.12{-}0.13\) at \(p=10,\alpha=0.05\)). The only procedures with nontrivial power are the DOBIN variants. 
 At \(p=10\) and low contamination (\(\alpha\le 0.10\)) they reach c \(=0.53{-}0.56\) with moderate f (around \(0.04{-}0.16\)). As \(\alpha\) grows, c decreases toward \(0.40{-}0.46\) and f inflates in some cells (e.g., \(p=10,\alpha=0.20{-}0.30\) shows f up to \(0.56\)). 
@@ -759,7 +761,3 @@ In addition, the comparison with alternative approaches highlights the complemen
 \bibliographystyle{jasa3}
 \bibliography{trabajo.bib}
 \end{document}
-
-
-
-
