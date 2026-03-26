@@ -38,6 +38,7 @@ rep_id <- 0L
 
 for (modelo in modelos) {
   for (mode in sim.modes) {
+    if (modelo == "FICM" && mode != 1) next
     for (i2 in seq_along(dimension)) {
       for (i1 in seq_along(alpha)) {
         for (i3 in seq_along(outl_dist)) {

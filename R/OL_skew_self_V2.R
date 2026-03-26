@@ -486,15 +486,8 @@ GenAtip_FICM <- function(n.x, p.x, par.lst, sim.mode = 1) {
   ## 2) máscara de celdas contaminadas
   B <- matrix(rbinom(n.x * p.x, 1, alpha_cell), nrow = n.x, ncol = p.x)
   
-  ## 3) medias según nº de clústeres
-  build_mu <- function(sim.mode, delta, p) {
-    if (sim.mode == 1)       rep(delta, p)
-    else if (sim.mode == 2)  sample(c(delta, -delta), p, TRUE)
-    else if (sim.mode == 3) {
-      rep(c(delta, -delta, delta, -delta), length.out = p)
-    } else stop("sim.mode debe ser 1, 2 o 3")
-  }
-  mu_vec <- build_mu(sim.mode, delta, p.x)
+  ## 3) medias: contaminación uniforme en dirección +delta (modo 1 únicamente)
+  mu_vec <- rep(delta, p.x)
   
   ## 4) genera Z sólo donde B == 1
   idx <- col(B)[B == 1]                 # columnas de las celdas TRUE

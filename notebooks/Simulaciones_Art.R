@@ -301,6 +301,7 @@ all_metrics <- list()
 ## Run analysis----
 for (modelo in modelos) {
   for (mode in sim.modes) {
+    if (modelo == "FICM" && mode != 1) next
     for (i2 in seq_along(dimension)) {
       for (i1 in seq_along(alpha)) {
         for (i3 in seq_along(outl_dist)) {
@@ -575,13 +576,7 @@ table_specs <- list(
        label   = "tab:fdcm_mode3"),
   list(model = "FICM", mode = 1,
        caption = "Summary of outlier detection methods for \\textbf{FICM}.",
-       label   = "tab:ficm_mode1"),
-  list(model = "FICM", mode = 2,
-       caption = "Summary of outlier detection methods for \\textbf{FICM} (two outlier groups).",
-       label   = "tab:ficm_mode2"),
-  list(model = "FICM", mode = 3,
-       caption = "Summary of outlier detection methods for \\textbf{FICM} (four outlier groups).",
-       label   = "tab:ficm_mode3")
+       label   = "tab:ficm_mode1")
 )
 
 for (spec in table_specs) {
